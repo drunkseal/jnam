@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 JNAM Web Controller - Lightweight, zero-dependency REST & Web UI server for JNAM.
-Includes Audio Device and Input/Output Channel routing controls.
+Includes Audio Device, Input/Output Routing, and Real-Time Pitch Detection Tuner.
 """
 import os
 import re
 import sys
 import glob
 import json
+import time
 import subprocess
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.parse
@@ -29,8 +30,11 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 state_cache = {
     "input_level": 0.0,
     "output_level": 0.0,
-    "quality_scale": 1.0
+    "quality_scale": 1.0,
+    "tuner_active": False
 }
+
+tuner_process = None
 
 def get_models():
     return sorted(glob.glob(os.path.join(MODELS_DIR, "**/*.nam"), recursive=True))
@@ -175,7 +179,7 @@ def generate_connections_xml(in_chan=None, out_chan=None, cab_enabled=None):
     if in_chan in ["both", "2"]:
         lines.append('      <port id="system:capture_2"><connection port="nam:input" /></port>')
 
-    # Middle + Output routing
+    # Output routing
     if cab_enabled:
         lines.append('      <port id="nam:output"><connection port="cab:in" /></port>')
         out_port = "cab:out"
@@ -210,7 +214,6 @@ def apply_jack_routing_live():
 
     generate_connections_xml(in_chan, out_chan, cab_enabled)
 
-    # Disconnect all first to avoid ghost links
     for cap in ["system:capture_1", "system:capture_2"]:
         subprocess.call(["jack_disconnect", cap, "nam:input"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -219,13 +222,11 @@ def apply_jack_routing_live():
             subprocess.call(["jack_disconnect", src, pb], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.call(["jack_disconnect", "nam:output", "cab:in"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    # Reconnect inputs
     if in_chan in ["both", "1"]:
         subprocess.call(["jack_connect", "system:capture_1", "nam:input"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if in_chan in ["both", "2"]:
         subprocess.call(["jack_connect", "system:capture_2", "nam:input"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    # Reconnect output
     if cab_enabled:
         subprocess.call(["jack_connect", "nam:output", "cab:in"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         out_src = "cab:out"
@@ -237,7 +238,6 @@ def apply_jack_routing_live():
     if out_chan in ["stereo", "2"]:
         subprocess.call(["jack_connect", out_src, "system:playback_2"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    # Reload aj-snapshot
     try:
         subprocess.call(["pkill", "-x", "aj-snapshot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.Popen(["aj-snapshot", "-d", "-j", "-q", CONNECTIONS_XML], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -253,6 +253,66 @@ def send_fifo(cmd):
         except Exception:
             return False
     return False
+
+def start_tuner():
+    global tuner_process
+    if tuner_process and tuner_process.poll() is None:
+        return tuner_process
+
+    state_cache["tuner_active"] = True
+
+    # 1. Silent Tuning: Disconnect audio output so open strings are muted
+    for src in ["nam:output", "cab:out"]:
+        for pb in ["system:playback_1", "system:playback_2"]:
+            subprocess.call(["jack_disconnect", src, pb], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    send_fifo("output_level = -90.0")
+
+    # 2. Determine target input port
+    in_chan = get_input_channel()
+    target_port = "system:capture_1" if in_chan == "1" else "system:capture_2"
+
+    # 3. Launch tuner binary
+    bin_paths = [
+        "/usr/local/bin/jnam-tuner",
+        "/opt/jnam/bin/jnam-tuner",
+        os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "bin", "jnam-tuner")
+    ]
+    tuner_bin = next((p for p in bin_paths if os.path.exists(p) and os.access(p, os.X_OK)), None)
+    if not tuner_bin:
+        print("[tuner] Error: jnam-tuner binary not found.")
+        return None
+
+    try:
+        tuner_process = subprocess.Popen(
+            [tuner_bin, target_port],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            bufsize=1,
+            universal_newlines=True
+        )
+        return tuner_process
+    except Exception as e:
+        print(f"[tuner] Failed starting tuner: {e}")
+        return None
+
+def stop_tuner():
+    global tuner_process
+    state_cache["tuner_active"] = False
+
+    if tuner_process:
+        try:
+            tuner_process.terminate()
+            tuner_process.wait(timeout=0.5)
+        except Exception:
+            try:
+                tuner_process.kill()
+            except Exception:
+                pass
+        tuner_process = None
+
+    # Restore master audio routing and volume
+    apply_jack_routing_live()
+    send_fifo(f"output_level = {state_cache['output_level']}")
 
 def restart_service():
     for svc in ["jnam.service", "nam-rig.service"]:
@@ -301,7 +361,6 @@ def get_full_status():
     cab_mode = get_cab_mode()
     cab_active = is_cab_effective_enabled()
 
-    # Routing
     connections = {}
     try:
         lsp_out = subprocess.check_output(["jack_lsp", "-c"], stderr=subprocess.DEVNULL).decode().splitlines()
@@ -316,7 +375,6 @@ def get_full_status():
     except Exception:
         pass
 
-    # CPU load
     jalv_cpu = 0.0
     jackd_cpu = 0.0
     try:
@@ -360,6 +418,9 @@ def get_full_status():
             "available_cards": get_alsa_cards()
         },
         "dsp": state_cache,
+        "tuner": {
+            "active": state_cache["tuner_active"]
+        },
         "telemetry": {
             "jalv_cpu": jalv_cpu,
             "jackd_cpu": jackd_cpu,
@@ -373,15 +434,18 @@ class JNAMHandler(BaseHTTPRequestHandler):
         return
 
     def send_json(self, data, code=200):
-        body = json.dumps(data).encode("utf-8")
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            body = json.dumps(data).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -429,6 +493,32 @@ class JNAMHandler(BaseHTTPRequestHandler):
                 "configured": get_audio_device(),
                 "cards": get_alsa_cards()
             })
+            return
+        elif path == "/api/tuner/stream":
+            # Server-Sent Events (SSE) Real-Time Pitch Data Stream
+            proc = start_tuner()
+            if not proc or not proc.stdout:
+                self.send_error(500, "Could not start tuner engine")
+                return
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+
+            try:
+                for line in proc.stdout:
+                    if not line:
+                        break
+                    data = f"data: {line.strip()}\n\n"
+                    self.wfile.write(data.encode("utf-8"))
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, Exception):
+                pass
+            finally:
+                stop_tuner()
             return
 
         if path == "/" or path == "":
@@ -577,6 +667,11 @@ class JNAMHandler(BaseHTTPRequestHandler):
             self.send_json({"success": ok, "parameter": "quality_scale", "value": val})
             return
 
+        elif path == "/api/tuner/stop":
+            stop_tuner()
+            self.send_json({"success": True, "active": False})
+            return
+
         elif path == "/api/service":
             action = req_data.get("action", "restart").lower()
             if action == "restart":
@@ -596,6 +691,7 @@ def run_server(host="0.0.0.0", port=8080):
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nStopping JNAM Web Controller...")
+        stop_tuner()
         server.server_close()
 
 if __name__ == "__main__":

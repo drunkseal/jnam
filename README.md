@@ -6,6 +6,10 @@ JNAM turns any Linux SBC (Orange Pi, Raspberry Pi, Radxa) or PC into a dedicated
 
 - **Sub-3ms Real-Time Latency**: Tuned for 128 samples at 48kHz on PREEMPT_RT or lowlatency kernels.
 - **Web Controller UI**: Modern browser interface to switch models, toggle cab bypass, select audio devices, route channels, tweak gain, and change quality from a phone or tablet.
+- **Built-in Real-Time Guitar Tuner**:
+  - Embedded high-precision chromatic tuner using the YIN pitch-detection algorithm.
+  - Real-time SSE (Server-Sent Events) streaming from JACK with needle & cent meter.
+  - **Silent Tuning**: Automatically mutes master audio output and pauses NAM processing while tuning.
 - **Audio Device & Channel Selection**:
   - Dynamically detect and switch ALSA soundcards (e.g. Focusrite Scarlett, Behringer, USB audio).
   - Select Input routing: **Both (Summed)**, **Input 1 (Mic)**, or **Input 2 (Guitar)**.

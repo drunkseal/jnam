@@ -1,4 +1,4 @@
-// JNAM Reactive Controller with Audio Hardware & Channel Routing
+// JNAM Reactive Controller with Real-Time Chromatic Tuner & SSE
 const API = {
   status: '/api/status',
   models: '/api/models',
@@ -10,11 +10,14 @@ const API = {
   setRouting: '/api/routing',
   setGain: '/api/gain',
   setQuality: '/api/quality',
+  tunerStream: '/api/tuner/stream',
+  tunerStop: '/api/tuner/stop',
   service: '/api/service'
 };
 
 let currentStatus = null;
 let isUserDraggingGain = false;
+let tunerEventSource = null;
 
 // DOM Elements
 const txtJack = document.getElementById('txt-jack');
@@ -55,8 +58,20 @@ const valInGain = document.getElementById('val-in-gain');
 const sliderOutGain = document.getElementById('slider-out-gain');
 const valOutGain = document.getElementById('val-out-gain');
 
+// Tuner Elements
+const btnTunerOpen = document.getElementById('btn-tuner-open');
+const btnTunerClose = document.getElementById('btn-tuner-close');
+const tunerOverlay = document.getElementById('tuner-overlay');
+const tunerNote = document.getElementById('tuner-note');
+const tunerOctave = document.getElementById('tuner-octave');
+const tunerFreq = document.getElementById('tuner-freq');
+const tunerNeedle = document.getElementById('tuner-needle');
+const tunerCents = document.getElementById('tuner-cents');
+const tunerStatusText = document.getElementById('tuner-status-text');
+
 // Fetch Status
 async function updateStatus() {
+  if (tunerEventSource) return; // Don't poll while in tuner mode
   try {
     const res = await fetch(API.status);
     if (!res.ok) return;
@@ -141,7 +156,6 @@ function renderStatus(data) {
   if (data.audio_hardware) {
     const hw = data.audio_hardware;
 
-    // In Channel
     inChanButtons.forEach(btn => {
       btn.classList.toggle('active', btn.dataset.chan === hw.input_channel);
     });
@@ -153,7 +167,6 @@ function renderStatus(data) {
       chainInLabel.textContent = 'In 2 (Guitar)';
     }
 
-    // Out Channel
     outChanButtons.forEach(btn => {
       btn.classList.toggle('active', btn.dataset.chan === hw.output_channel);
     });
@@ -165,7 +178,6 @@ function renderStatus(data) {
       chainOutLabel.textContent = 'Right (2)';
     }
 
-    // Devices & Badge
     let activeCardName = 'Auto-Detect';
     if (hw.available_cards) {
       hw.available_cards.forEach(card => {
@@ -260,7 +272,105 @@ async function loadDevices() {
   }
 }
 
+// ============================================================================
+// Real-Time Chromatic Tuner Logic (SSE Stream)
+// ============================================================================
+function openTuner() {
+  tunerOverlay.classList.remove('hidden');
+  resetTunerDisplay();
+
+  if (tunerEventSource) {
+    tunerEventSource.close();
+  }
+
+  tunerEventSource = new EventSource(API.tunerStream);
+
+  tunerEventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      renderTunerData(data);
+    } catch (e) {
+      console.error('Tuner parse error', e);
+    }
+  };
+
+  tunerEventSource.onerror = (err) => {
+    console.warn('Tuner SSE disconnected', err);
+  };
+}
+
+function closeTuner() {
+  if (tunerEventSource) {
+    tunerEventSource.close();
+    tunerEventSource = null;
+  }
+  tunerOverlay.classList.add('hidden');
+  resetTunerDisplay();
+
+  // Inform backend to restore audio and unmute
+  fetch(API.tunerStop, { method: 'POST' }).then(() => {
+    setTimeout(updateStatus, 300);
+  });
+}
+
+function resetTunerDisplay() {
+  tunerNote.textContent = '--';
+  tunerNote.className = 'tuner-note-name';
+  tunerOctave.textContent = '';
+  tunerFreq.textContent = 'Pluck a string...';
+  tunerNeedle.style.left = '50%';
+  tunerNeedle.className = 'tuner-meter-needle';
+  tunerCents.textContent = '0.0 Cents';
+  tunerStatusText.textContent = 'LISTENING FOR GUITAR...';
+  tunerStatusText.className = 'tuner-status-text';
+}
+
+function renderTunerData(data) {
+  if (data.active) {
+    tunerNote.textContent = data.note;
+    tunerOctave.textContent = data.octave !== undefined ? data.octave : '';
+    tunerFreq.textContent = `${data.freq.toFixed(2)} Hz`;
+
+    const cents = data.cents;
+    const sign = cents > 0 ? '+' : '';
+    tunerCents.textContent = `${sign}${cents.toFixed(1)} Cents`;
+
+    // Map -50..+50 cents to 4%..96% needle position
+    const clampedCents = Math.max(-50, Math.min(50, cents));
+    const needlePct = 50 + (clampedCents / 50) * 44;
+    tunerNeedle.style.left = `${needlePct.toFixed(1)}%`;
+
+    if (data.in_tune) {
+      tunerNote.className = 'tuner-note-name in-tune';
+      tunerNeedle.className = 'tuner-meter-needle in-tune';
+      tunerStatusText.textContent = '● IN TUNE ●';
+      tunerStatusText.className = 'tuner-status-text in-tune';
+    } else {
+      tunerNote.className = 'tuner-note-name';
+      tunerNeedle.className = 'tuner-meter-needle';
+      if (cents < -3.0) {
+        tunerStatusText.textContent = `◄ TUNE UP (${Math.abs(cents).toFixed(1)}c flat)`;
+      } else {
+        tunerStatusText.textContent = `► TUNE DOWN (+${cents.toFixed(1)}c sharp)`;
+      }
+      tunerStatusText.className = 'tuner-status-text';
+    }
+  } else {
+    // String stopped or silence
+    tunerNote.className = 'tuner-note-name';
+    tunerNeedle.className = 'tuner-meter-needle';
+    tunerStatusText.className = 'tuner-status-text';
+    tunerStatusText.textContent = 'LISTENING FOR GUITAR...';
+    if (tunerNote.textContent === '--') {
+      tunerFreq.textContent = 'Pluck a string...';
+    }
+  }
+}
+
 // Event Listeners
+btnTunerOpen.addEventListener('click', openTuner);
+btnTunerClose.addEventListener('click', closeTuner);
+
 selectModel.addEventListener('change', async (e) => {
   displayModelName.textContent = 'Switching model...';
   try {
@@ -302,7 +412,6 @@ selectAudioDevice.addEventListener('change', async (e) => {
   }
 });
 
-// Input Channel Click
 inChanButtons.forEach(btn => {
   btn.addEventListener('click', async () => {
     const chan = btn.dataset.chan;
@@ -320,7 +429,6 @@ inChanButtons.forEach(btn => {
   });
 });
 
-// Output Channel Click
 outChanButtons.forEach(btn => {
   btn.addEventListener('click', async () => {
     const chan = btn.dataset.chan;
@@ -338,7 +446,6 @@ outChanButtons.forEach(btn => {
   });
 });
 
-// Cab mode switcher buttons
 cabModeButtons.forEach(btn => {
   btn.addEventListener('click', async () => {
     const mode = btn.dataset.mode;
@@ -355,7 +462,6 @@ cabModeButtons.forEach(btn => {
   });
 });
 
-// Quality Switcher
 qualityButtons.forEach(btn => {
   btn.addEventListener('click', async () => {
     const val = parseFloat(btn.dataset.quality);
@@ -372,7 +478,6 @@ qualityButtons.forEach(btn => {
   });
 });
 
-// Sliders
 let inGainDebounce = null;
 sliderInGain.addEventListener('input', (e) => {
   isUserDraggingGain = true;
@@ -420,7 +525,6 @@ window.setGain = async function(channel, val) {
   });
 };
 
-// Restart Engine
 btnRestart.addEventListener('click', async () => {
   btnRestart.style.transform = 'rotate(180deg)';
   btnRestart.disabled = true;

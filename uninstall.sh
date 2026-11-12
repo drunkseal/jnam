@@ -28,7 +28,7 @@ systemctl disable jnam-jack.service 2>/dev/null || true
 rm -f /etc/systemd/system/jnam*.service
 systemctl daemon-reload
 
-rm -f /usr/local/bin/jnam
+rm -f /usr/local/bin/jnam /usr/local/bin/jnam-tuner
 rm -rf /opt/jnam
 
 echo -e "${GREEN}JNAM removed successfully.${RESET}"

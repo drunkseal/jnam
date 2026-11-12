@@ -36,11 +36,11 @@ if command -v apt-get >/dev/null 2>&1; then
     PKG_MGR="apt"
     echo -e "Detected ${GREEN}Debian/Ubuntu/Armbian (apt)${RESET}"
     apt-get update
-    apt-get install -y jackd2 jalv jconvolver aj-snapshot sox python3 curl alsa-utils
+    apt-get install -y jackd2 libjack-jackd2-dev gcc make jalv jconvolver aj-snapshot sox python3 curl alsa-utils
 elif command -v dnf >/dev/null 2>&1; then
     PKG_MGR="dnf"
     echo -e "Detected ${GREEN}Fedora/RHEL/CentOS (dnf)${RESET}"
-    dnf install -y jack-audio-connection-kit jalv sox python3 curl alsa-utils
+    dnf install -y jack-audio-connection-kit jack-audio-connection-kit-devel gcc make jalv sox python3 curl alsa-utils
     # Check for jconvolver / aj-snapshot on Fedora
     if ! command -v jconvolver >/dev/null 2>&1; then
         echo -e "${YELLOW}Notice: jconvolver may need to be installed from RPM Fusion or compiled.${RESET}"
@@ -48,7 +48,7 @@ elif command -v dnf >/dev/null 2>&1; then
 elif command -v pacman >/dev/null 2>&1; then
     PKG_MGR="pacman"
     echo -e "Detected ${GREEN}Arch Linux/Manjaro (pacman)${RESET}"
-    pacman -Sy --noconfirm jack2 jalv sox python curl alsa-utils
+    pacman -Sy --noconfirm jack2 gcc make jalv sox python curl alsa-utils
     if ! command -v jconvolver >/dev/null 2>&1; then
         echo -e "${YELLOW}Notice: jconvolver and aj-snapshot can be installed via AUR (e.g. yay -S jconvolver aj-snapshot).${RESET}"
     fi
@@ -93,13 +93,27 @@ cp -r "${SCRIPT_DIR}/bin" "${INSTALL_DIR}/"
 cp -r "${SCRIPT_DIR}/scripts" "${INSTALL_DIR}/"
 cp -r "${SCRIPT_DIR}/web" "${INSTALL_DIR}/"
 cp -r "${SCRIPT_DIR}/systemd" "${INSTALL_DIR}/"
+[ -d "${SCRIPT_DIR}/src" ] && cp -r "${SCRIPT_DIR}/src" "${INSTALL_DIR}/"
+[ -f "${SCRIPT_DIR}/Makefile" ] && cp "${SCRIPT_DIR}/Makefile" "${INSTALL_DIR}/"
+
+# Build tuner if source is present
+if [ -f "${INSTALL_DIR}/src/tuner.c" ]; then
+    echo -e "Compiling real-time tuner..."
+    gcc -O2 "${INSTALL_DIR}/src/tuner.c" -o "${INSTALL_DIR}/bin/jnam-tuner" -ljack -lm || {
+        echo -e "${YELLOW}Warning: Failed to compile tuner binary. Continuing...${RESET}"
+    }
+fi
 
 chmod +x "${INSTALL_DIR}/bin/jnam"
+[ -f "${INSTALL_DIR}/bin/jnam-tuner" ] && chmod +x "${INSTALL_DIR}/bin/jnam-tuner"
 chmod +x "${INSTALL_DIR}/scripts/"*.sh
 chmod +x "${INSTALL_DIR}/web/server.py"
 
 # Symlink global CLI binary
 ln -sf "${INSTALL_DIR}/bin/jnam" /usr/local/bin/jnam
+if [ -f "${INSTALL_DIR}/bin/jnam-tuner" ]; then
+    ln -sf "${INSTALL_DIR}/bin/jnam-tuner" /usr/local/bin/jnam-tuner
+fi
 
 # ------------------------------------------------------------------------------
 # 4. Set up Data Directories (/var/lib/jnam and user symlinks)

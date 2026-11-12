@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="app-container">
@@ -17,23 +17,32 @@
         <div class="logo-badge">JNAM</div>
         <div class="brand-sub">JACK Neural Amp Modeler</div>
       </div>
-      <div class="status-pills">
-        <div class="pill" id="pill-jack">
-          <span class="led red" id="led-jack"></span> JACK: <span id="txt-jack">OFFLINE</span>
+
+      <div class="header-actions">
+        <!-- Tuner Trigger Button -->
+        <button class="btn-tuner-header" id="btn-tuner-open">
+          <span class="tuner-icon">🎯</span> TUNER
+        </button>
+
+        <div class="status-pills">
+          <div class="pill" id="pill-jack">
+            <span class="led red" id="led-jack"></span> JACK: <span id="txt-jack">OFFLINE</span>
+          </div>
+          <div class="pill" id="pill-rig">
+            <span class="led red" id="led-rig"></span> RIG: <span id="txt-rig">INACTIVE</span>
+          </div>
+          <div class="pill pill-cpu">
+            CPU: <span id="txt-cpu" class="val-hl">0.0%</span>
+          </div>
         </div>
-        <div class="pill" id="pill-rig">
-          <span class="led red" id="led-rig"></span> RIG: <span id="txt-rig">INACTIVE</span>
-        </div>
-        <div class="pill pill-cpu">
-          CPU: <span id="txt-cpu" class="val-hl">0.0%</span>
-        </div>
+
+        <button class="btn-icon" id="btn-restart" title="Restart Audio Engine">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M23 4v6h-6"></path>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+        </button>
       </div>
-      <button class="btn-icon" id="btn-restart" title="Restart Audio Engine">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M23 4v6h-6"></path>
-          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-        </svg>
-      </button>
     </header>
 
     <!-- Signal Chain Diagram -->
@@ -132,7 +141,6 @@
           <span class="badge active" id="device-badge">FOCUSRITE</span>
         </div>
         <div class="card-body hardware-body">
-          <!-- Device Selection -->
           <div class="selector-group">
             <label for="select-audio-device">Audio Interface (ALSA Soundcard)</label>
             <select id="select-audio-device" class="custom-select">
@@ -140,7 +148,6 @@
             </select>
           </div>
 
-          <!-- Channel Selection Rows -->
           <div class="channel-routing-grid">
             <div class="routing-control-group">
               <label>Input Channel</label>
@@ -175,7 +182,6 @@
           </div>
         </div>
         <div class="card-body sliders-grid">
-          <!-- Input Gain Slider -->
           <div class="slider-container">
             <div class="slider-header">
               <span class="slider-name">INPUT LEVEL</span>
@@ -189,7 +195,6 @@
             </div>
           </div>
 
-          <!-- Output Gain Slider -->
           <div class="slider-container">
             <div class="slider-header">
               <span class="slider-name">MASTER OUTPUT</span>
@@ -211,6 +216,53 @@
       <span>JNAM Engine &bull; Zero-Latency PREEMPT_RT Audio Rig</span>
       <span class="footer-dim" id="footer-hardware-info">Focusrite Scarlett Solo &bull; Allwinner H616 1.5GHz</span>
     </footer>
+  </div>
+
+  <!-- Real-Time Chromatic Tuner Modal Overlay -->
+  <div class="tuner-overlay hidden" id="tuner-overlay">
+    <div class="tuner-modal">
+      <div class="tuner-header">
+        <div class="tuner-title">
+          <span class="accent-dot emerald"></span> JNAM CHROMATIC TUNER
+        </div>
+        <span class="badge bypassed">OUTPUT MUTED (SILENT)</span>
+      </div>
+
+      <!-- Main Tuner Readout -->
+      <div class="tuner-display-box">
+        <div class="tuner-note-row">
+          <span class="tuner-note-name" id="tuner-note">--</span>
+          <span class="tuner-note-octave" id="tuner-octave"></span>
+        </div>
+        <div class="tuner-freq-readout" id="tuner-freq">Pluck a string...</div>
+      </div>
+
+      <!-- Pitch Deviation Cents Meter -->
+      <div class="tuner-meter-container">
+        <div class="tuner-scale-labels">
+          <span>-50</span>
+          <span>-25</span>
+          <span class="center-zero">0</span>
+          <span>+25</span>
+          <span>+50</span>
+        </div>
+        <div class="tuner-meter-track">
+          <div class="tuner-center-target"></div>
+          <div class="tuner-meter-needle" id="tuner-needle" style="left: 50%;"></div>
+        </div>
+        <div class="tuner-cents-value" id="tuner-cents">0.0 Cents</div>
+      </div>
+
+      <!-- Tuning Status Alert -->
+      <div class="tuner-status-bar" id="tuner-status-bar">
+        <span class="tuner-status-text" id="tuner-status-text">LISTENING FOR GUITAR...</span>
+      </div>
+
+      <!-- Exit Button -->
+      <button class="btn-exit-tuner" id="btn-tuner-close">
+        EXIT TUNER & UNMUTE AUDIO
+      </button>
+    </div>
   </div>
 
   <script src="app.js"></script>
