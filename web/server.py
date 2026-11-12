@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
 JNAM Web Controller - Lightweight, zero-dependency REST & Web UI server for JNAM.
+Includes Audio Device and Input/Output Channel routing controls.
 """
 import os
+import re
 import sys
 import glob
 import json
@@ -17,10 +19,13 @@ CURRENT_MODEL = os.path.join(NAM_DIR, "current_model.nam")
 CURRENT_IR = os.path.join(NAM_DIR, "current_ir.wav")
 CAB_CONF = os.path.join(NAM_DIR, "cab.conf")
 CAB_MODE_FILE = os.path.join(NAM_DIR, "cab_mode")
+AUDIO_DEV_FILE = os.path.join(NAM_DIR, "audio_device")
+IN_CHAN_FILE = os.path.join(NAM_DIR, "input_channel")
+OUT_CHAN_FILE = os.path.join(NAM_DIR, "output_channel")
+CONNECTIONS_XML = os.path.join(NAM_DIR, "connections.xml")
 FIFO_PATH = "/tmp/nam_control.fifo"
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
-# In-memory cached gain & quality state
 state_cache = {
     "input_level": 0.0,
     "output_level": 0.0,
@@ -77,6 +82,168 @@ def is_cab_effective_enabled():
         meta = get_model_metadata(cur_m)
         return meta.get("gear_type") != "amp_cab"
 
+def get_audio_device():
+    if os.path.exists(AUDIO_DEV_FILE):
+        try:
+            with open(AUDIO_DEV_FILE, "r") as f:
+                val = f.read().strip()
+                if val:
+                    return val
+        except Exception:
+            pass
+    return "auto"
+
+def set_audio_device(dev):
+    with open(AUDIO_DEV_FILE, "w") as f:
+        f.write(dev.strip() + "\n")
+
+def get_input_channel():
+    if os.path.exists(IN_CHAN_FILE):
+        try:
+            with open(IN_CHAN_FILE, "r") as f:
+                val = f.read().strip().lower()
+                if val in ["both", "1", "2"]:
+                    return val
+        except Exception:
+            pass
+    return "both"
+
+def set_input_channel(chan):
+    with open(IN_CHAN_FILE, "w") as f:
+        f.write(chan.strip().lower() + "\n")
+
+def get_output_channel():
+    if os.path.exists(OUT_CHAN_FILE):
+        try:
+            with open(OUT_CHAN_FILE, "r") as f:
+                val = f.read().strip().lower()
+                if val in ["stereo", "1", "2"]:
+                    return val
+        except Exception:
+            pass
+    return "stereo"
+
+def set_output_channel(chan):
+    with open(OUT_CHAN_FILE, "w") as f:
+        f.write(chan.strip().lower() + "\n")
+
+def get_alsa_cards():
+    cards = []
+    if not os.path.exists("/proc/asound/cards"):
+        return cards
+    try:
+        with open("/proc/asound/cards", "r") as f:
+            content = f.read()
+        matches = re.findall(r'^\s*(\d+)\s+\[([^\]]+)\]:\s+([^\n]+)\n\s+([^\n]+)', content, re.MULTILINE)
+        cur_dev = get_audio_device()
+        for m in matches:
+            idx = int(m[0])
+            card_id = m[1].strip()
+            name = m[2].strip()
+            desc = m[3].strip()
+            dev_hw = f"hw:{idx}"
+            cards.append({
+                "index": idx,
+                "id": card_id,
+                "name": name,
+                "desc": desc,
+                "hw": dev_hw,
+                "is_active": (cur_dev == dev_hw or (cur_dev == "auto" and "USB" in card_id))
+            })
+    except Exception:
+        pass
+    return cards
+
+def generate_connections_xml(in_chan=None, out_chan=None, cab_enabled=None):
+    if in_chan is None:
+        in_chan = get_input_channel()
+    if out_chan is None:
+        out_chan = get_output_channel()
+    if cab_enabled is None:
+        cab_enabled = is_cab_effective_enabled()
+
+    lines = [
+        '<?xml version="1.0" encoding="utf-8"?>',
+        '<aj-snapshot>',
+        '  <jack>',
+        '    <connections>'
+    ]
+
+    # Input routing
+    if in_chan in ["both", "1"]:
+        lines.append('      <port id="system:capture_1"><connection port="nam:input" /></port>')
+    if in_chan in ["both", "2"]:
+        lines.append('      <port id="system:capture_2"><connection port="nam:input" /></port>')
+
+    # Middle + Output routing
+    if cab_enabled:
+        lines.append('      <port id="nam:output"><connection port="cab:in" /></port>')
+        out_port = "cab:out"
+    else:
+        out_port = "nam:output"
+
+    out_connections = []
+    if out_chan in ["stereo", "1"]:
+        out_connections.append('<connection port="system:playback_1" />')
+    if out_chan in ["stereo", "2"]:
+        out_connections.append('<connection port="system:playback_2" />')
+
+    if out_connections:
+        lines.append(f'      <port id="{out_port}">')
+        for conn in out_connections:
+            lines.append(f'        {conn}')
+        lines.append('      </port>')
+
+    lines.append('    </connections>')
+    lines.append('  </jack>')
+    lines.append('</aj-snapshot>')
+
+    content = "\n".join(lines) + "\n"
+    with open(CONNECTIONS_XML, "w") as f:
+        f.write(content)
+    return content
+
+def apply_jack_routing_live():
+    in_chan = get_input_channel()
+    out_chan = get_output_channel()
+    cab_enabled = is_cab_effective_enabled()
+
+    generate_connections_xml(in_chan, out_chan, cab_enabled)
+
+    # Disconnect all first to avoid ghost links
+    for cap in ["system:capture_1", "system:capture_2"]:
+        subprocess.call(["jack_disconnect", cap, "nam:input"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    for src in ["nam:output", "cab:out"]:
+        for pb in ["system:playback_1", "system:playback_2"]:
+            subprocess.call(["jack_disconnect", src, pb], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.call(["jack_disconnect", "nam:output", "cab:in"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # Reconnect inputs
+    if in_chan in ["both", "1"]:
+        subprocess.call(["jack_connect", "system:capture_1", "nam:input"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if in_chan in ["both", "2"]:
+        subprocess.call(["jack_connect", "system:capture_2", "nam:input"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # Reconnect output
+    if cab_enabled:
+        subprocess.call(["jack_connect", "nam:output", "cab:in"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        out_src = "cab:out"
+    else:
+        out_src = "nam:output"
+
+    if out_chan in ["stereo", "1"]:
+        subprocess.call(["jack_connect", out_src, "system:playback_1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if out_chan in ["stereo", "2"]:
+        subprocess.call(["jack_connect", out_src, "system:playback_2"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # Reload aj-snapshot
+    try:
+        subprocess.call(["pkill", "-x", "aj-snapshot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["aj-snapshot", "-d", "-j", "-q", CONNECTIONS_XML], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
 def send_fifo(cmd):
     if os.path.exists(FIFO_PATH):
         try:
@@ -88,30 +255,38 @@ def send_fifo(cmd):
     return False
 
 def restart_service():
-    for svc in ["nam-rig.service", "jnam.service"]:
+    for svc in ["jnam.service", "nam-rig.service"]:
         try:
             if subprocess.call(["systemctl", "is-active", "--quiet", svc]) == 0:
                 subprocess.call(["sudo", "systemctl", "restart", svc])
                 return True
         except Exception:
             pass
-    # If neither is currently active, try restarting nam-rig
     try:
         subprocess.call(["sudo", "systemctl", "restart", "nam-rig.service"])
         return True
     except Exception:
         return False
 
+def restart_jack():
+    for svc in ["jnam-jack.service", "jack.service"]:
+        try:
+            if subprocess.call(["systemctl", "is-active", "--quiet", svc]) == 0:
+                subprocess.call(["sudo", "systemctl", "restart", svc])
+                restart_service()
+                return True
+        except Exception:
+            pass
+    return False
+
 def get_full_status():
-    # JACK status
     try:
         jack_active = subprocess.call(["jack_wait", "-c"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
     except Exception:
         jack_active = False
 
-    # Rig service status
     rig_status = "inactive"
-    for svc in ["nam-rig.service", "jnam.service"]:
+    for svc in ["jnam.service", "nam-rig.service"]:
         try:
             out = subprocess.check_output(["systemctl", "is-active", svc], stderr=subprocess.DEVNULL).decode().strip()
             if out == "active":
@@ -126,7 +301,7 @@ def get_full_status():
     cab_mode = get_cab_mode()
     cab_active = is_cab_effective_enabled()
 
-    # Audio Routing
+    # Routing
     connections = {}
     try:
         lsp_out = subprocess.check_output(["jack_lsp", "-c"], stderr=subprocess.DEVNULL).decode().splitlines()
@@ -141,7 +316,7 @@ def get_full_status():
     except Exception:
         pass
 
-    # CPU load of jalv & jackd
+    # CPU load
     jalv_cpu = 0.0
     jackd_cpu = 0.0
     try:
@@ -178,6 +353,12 @@ def get_full_status():
             "effective_active": cab_active,
             "bypassed": not cab_active
         },
+        "audio_hardware": {
+            "configured_device": get_audio_device(),
+            "input_channel": get_input_channel(),
+            "output_channel": get_output_channel(),
+            "available_cards": get_alsa_cards()
+        },
         "dsp": state_cache,
         "telemetry": {
             "jalv_cpu": jalv_cpu,
@@ -189,7 +370,6 @@ def get_full_status():
 
 class JNAMHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        # Quiet logging
         return
 
     def send_json(self, data, code=200):
@@ -244,8 +424,13 @@ class JNAMHandler(BaseHTTPRequestHandler):
                 })
             self.send_json({"irs": irs})
             return
+        elif path == "/api/devices":
+            self.send_json({
+                "configured": get_audio_device(),
+                "cards": get_alsa_cards()
+            })
+            return
 
-        # Serve static assets
         if path == "/" or path == "":
             path = "/index.html"
         safe_rel = os.path.relpath(path, "/")
@@ -318,7 +503,6 @@ class JNAMHandler(BaseHTTPRequestHandler):
                 if os.path.lexists(CURRENT_IR):
                     os.remove(CURRENT_IR)
                 os.symlink(target, CURRENT_IR)
-                # Re-generate cab.conf
                 with open(CAB_CONF, "w") as fp:
                     fp.write(f"""/convolver/new 1 1 128 2048 1.0\n/input/name 1 in\n/output/name 1 out\n/impulse/read 1 1 1 0 0 0 1 "{CURRENT_IR}"\n""")
                 restart_service()
@@ -337,6 +521,36 @@ class JNAMHandler(BaseHTTPRequestHandler):
                 self.send_json({"success": True, "mode": mode, "effective_active": is_cab_effective_enabled()})
             else:
                 self.send_json({"success": False, "error": "Invalid mode"}, code=400)
+            return
+
+        elif path == "/api/routing":
+            changed_device = False
+            if "device" in req_data:
+                dev = str(req_data["device"]).strip()
+                set_audio_device(dev)
+                changed_device = True
+
+            if "input_channel" in req_data:
+                in_chan = str(req_data["input_channel"]).lower()
+                if in_chan in ["both", "1", "2"]:
+                    set_input_channel(in_chan)
+
+            if "output_channel" in req_data:
+                out_chan = str(req_data["output_channel"]).lower()
+                if out_chan in ["stereo", "1", "2"]:
+                    set_output_channel(out_chan)
+
+            if changed_device:
+                restart_jack()
+            else:
+                apply_jack_routing_live()
+
+            self.send_json({
+                "success": True,
+                "input_channel": get_input_channel(),
+                "output_channel": get_output_channel(),
+                "device": get_audio_device()
+            })
             return
 
         elif path == "/api/gain":

@@ -1,11 +1,13 @@
-// JNAM Reactive Controller
+// JNAM Reactive Controller with Audio Hardware & Channel Routing
 const API = {
   status: '/api/status',
   models: '/api/models',
   irs: '/api/irs',
+  devices: '/api/devices',
   setModel: '/api/model',
   setIr: '/api/ir',
   setCab: '/api/cab',
+  setRouting: '/api/routing',
   setGain: '/api/gain',
   setQuality: '/api/quality',
   service: '/api/service'
@@ -24,6 +26,8 @@ const btnRestart = document.getElementById('btn-restart');
 
 const chainNamName = document.getElementById('chain-nam-name');
 const chainCabState = document.getElementById('chain-cab-state');
+const chainInLabel = document.getElementById('chain-in-label');
+const chainOutLabel = document.getElementById('chain-out-label');
 const nodeCab = document.getElementById('node-cab');
 const wireCab = document.getElementById('wire-cab');
 
@@ -37,6 +41,14 @@ const selectIr = document.getElementById('select-ir');
 const cabInfoBanner = document.getElementById('cab-info-banner');
 const cabModeButtons = document.querySelectorAll('.cab-mode-selector .mode-btn');
 
+// Hardware & Routing Elements
+const selectAudioDevice = document.getElementById('select-audio-device');
+const deviceBadge = document.getElementById('device-badge');
+const inChanButtons = document.querySelectorAll('#in-channel-group .chan-btn');
+const outChanButtons = document.querySelectorAll('#out-channel-group .chan-btn');
+const footerHardwareInfo = document.getElementById('footer-hardware-info');
+
+// DSP Controls
 const qualityButtons = document.querySelectorAll('.quality-btn');
 const sliderInGain = document.getElementById('slider-in-gain');
 const valInGain = document.getElementById('val-in-gain');
@@ -119,10 +131,51 @@ function renderStatus(data) {
     nodeCab.classList.remove('active');
     cabInfoBanner.style.display = 'block';
     if (m.is_full_rig) {
-      cabInfoBanner.textContent = 'Cab IR bypassed because active model already has baked-in cabinet & microphones.';
+      cabInfoBanner.textContent = 'Cab IR bypassed because active model already contains a physical cabinet & microphone capture.';
     } else {
       cabInfoBanner.textContent = 'Cab IR manually bypassed. Guitar signal routes directly to hardware playback.';
     }
+  }
+
+  // Audio Hardware & Routing
+  if (data.audio_hardware) {
+    const hw = data.audio_hardware;
+
+    // In Channel
+    inChanButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.chan === hw.input_channel);
+    });
+    if (hw.input_channel === 'both') {
+      chainInLabel.textContent = 'In 1 + 2';
+    } else if (hw.input_channel === '1') {
+      chainInLabel.textContent = 'In 1 (Mic)';
+    } else {
+      chainInLabel.textContent = 'In 2 (Guitar)';
+    }
+
+    // Out Channel
+    outChanButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.chan === hw.output_channel);
+    });
+    if (hw.output_channel === 'stereo') {
+      chainOutLabel.textContent = 'Stereo';
+    } else if (hw.output_channel === '1') {
+      chainOutLabel.textContent = 'Left (1)';
+    } else {
+      chainOutLabel.textContent = 'Right (2)';
+    }
+
+    // Devices & Badge
+    let activeCardName = 'Auto-Detect';
+    if (hw.available_cards) {
+      hw.available_cards.forEach(card => {
+        if (card.is_active) {
+          activeCardName = card.id || card.name;
+        }
+      });
+    }
+    deviceBadge.textContent = activeCardName.toUpperCase();
+    footerHardwareInfo.textContent = `${activeCardName} • JACK2 48kHz / 128 Buffer`;
   }
 
   // Quality button
@@ -131,7 +184,7 @@ function renderStatus(data) {
     btn.classList.toggle('active', parseFloat(btn.dataset.quality) === qVal);
   });
 
-  // Gains (only update sliders if user is not actively sliding)
+  // Gains
   if (!isUserDraggingGain && data.dsp) {
     if (data.dsp.input_level !== undefined) {
       sliderInGain.value = data.dsp.input_level;
@@ -150,7 +203,7 @@ function formatGain(val) {
   return `${sign}${num.toFixed(1)} dB`;
 }
 
-// Fetch Models list
+// Fetch Models
 async function loadModels() {
   try {
     const res = await fetch(API.models);
@@ -169,7 +222,7 @@ async function loadModels() {
   }
 }
 
-// Fetch IRs list
+// Fetch IRs
 async function loadIrs() {
   try {
     const res = await fetch(API.irs);
@@ -184,6 +237,26 @@ async function loadIrs() {
     });
   } catch (err) {
     console.error('Failed loading IRs', err);
+  }
+}
+
+// Fetch Audio Devices
+async function loadDevices() {
+  try {
+    const res = await fetch(API.devices);
+    const data = await res.json();
+    selectAudioDevice.innerHTML = '<option value="auto">Auto-Detect USB Interface</option>';
+    data.cards.forEach(card => {
+      const opt = document.createElement('option');
+      opt.value = card.hw;
+      opt.textContent = `[${card.hw}] ${card.name} (${card.desc})`;
+      if (card.hw === data.configured || (data.configured === 'auto' && card.is_active)) {
+        opt.selected = true;
+      }
+      selectAudioDevice.appendChild(opt);
+    });
+  } catch (err) {
+    console.error('Failed loading devices', err);
   }
 }
 
@@ -213,6 +286,56 @@ selectIr.addEventListener('change', async (e) => {
   } catch (err) {
     console.error(err);
   }
+});
+
+selectAudioDevice.addEventListener('change', async (e) => {
+  deviceBadge.textContent = 'SWITCHING...';
+  try {
+    await fetch(API.setRouting, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device: e.target.value })
+    });
+    setTimeout(updateStatus, 1500);
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+// Input Channel Click
+inChanButtons.forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const chan = btn.dataset.chan;
+    inChanButtons.forEach(b => b.classList.toggle('active', b === btn));
+    try {
+      await fetch(API.setRouting, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input_channel: chan })
+      });
+      setTimeout(updateStatus, 200);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+});
+
+// Output Channel Click
+outChanButtons.forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const chan = btn.dataset.chan;
+    outChanButtons.forEach(b => b.classList.toggle('active', b === btn));
+    try {
+      await fetch(API.setRouting, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ output_channel: chan })
+      });
+      setTimeout(updateStatus, 200);
+    } catch (err) {
+      console.error(err);
+    }
+  });
 });
 
 // Cab mode switcher buttons
@@ -320,5 +443,6 @@ btnRestart.addEventListener('click', async () => {
 // Init
 loadModels();
 loadIrs();
+loadDevices();
 updateStatus();
 setInterval(updateStatus, 1500);

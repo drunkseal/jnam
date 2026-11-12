@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-JNAM Command-Line Interface - Manage models, cab IRs, gain, quality, and services.
+JNAM Command-Line Interface - Manage models, cab IRs, gain, quality, hardware devices, and routing.
 """
 import os
+import re
 import sys
 import glob
 import json
@@ -16,6 +17,10 @@ CURRENT_MODEL = os.path.join(NAM_DIR, "current_model.nam")
 CURRENT_IR = os.path.join(NAM_DIR, "current_ir.wav")
 CAB_CONF = os.path.join(NAM_DIR, "cab.conf")
 CAB_MODE_FILE = os.path.join(NAM_DIR, "cab_mode")
+AUDIO_DEV_FILE = os.path.join(NAM_DIR, "audio_device")
+IN_CHAN_FILE = os.path.join(NAM_DIR, "input_channel")
+OUT_CHAN_FILE = os.path.join(NAM_DIR, "output_channel")
+CONNECTIONS_XML = os.path.join(NAM_DIR, "connections.xml")
 FIFO_PATH = "/tmp/nam_control.fifo"
 
 CYAN = "\033[96m"
@@ -90,6 +95,81 @@ def is_cab_effective_enabled():
             return False
         return True
 
+def get_audio_device():
+    if os.path.exists(AUDIO_DEV_FILE):
+        try:
+            with open(AUDIO_DEV_FILE, "r") as f:
+                val = f.read().strip()
+                if val:
+                    return val
+        except Exception:
+            pass
+    return "auto"
+
+def set_audio_device(dev):
+    os.makedirs(NAM_DIR, exist_ok=True)
+    with open(AUDIO_DEV_FILE, "w") as f:
+        f.write(dev.strip() + "\n")
+
+def get_input_channel():
+    if os.path.exists(IN_CHAN_FILE):
+        try:
+            with open(IN_CHAN_FILE, "r") as f:
+                val = f.read().strip().lower()
+                if val in ["both", "1", "2"]:
+                    return val
+        except Exception:
+            pass
+    return "both"
+
+def set_input_channel(chan):
+    os.makedirs(NAM_DIR, exist_ok=True)
+    with open(IN_CHAN_FILE, "w") as f:
+        f.write(chan.strip().lower() + "\n")
+
+def get_output_channel():
+    if os.path.exists(OUT_CHAN_FILE):
+        try:
+            with open(OUT_CHAN_FILE, "r") as f:
+                val = f.read().strip().lower()
+                if val in ["stereo", "1", "2"]:
+                    return val
+        except Exception:
+            pass
+    return "stereo"
+
+def set_output_channel(chan):
+    os.makedirs(NAM_DIR, exist_ok=True)
+    with open(OUT_CHAN_FILE, "w") as f:
+        f.write(chan.strip().lower() + "\n")
+
+def get_alsa_cards():
+    cards = []
+    if not os.path.exists("/proc/asound/cards"):
+        return cards
+    try:
+        with open("/proc/asound/cards", "r") as f:
+            content = f.read()
+        matches = re.findall(r'^\s*(\d+)\s+\[([^\]]+)\]:\s+([^\n]+)\n\s+([^\n]+)', content, re.MULTILINE)
+        cur_dev = get_audio_device()
+        for m in matches:
+            idx = int(m[0])
+            card_id = m[1].strip()
+            name = m[2].strip()
+            desc = m[3].strip()
+            dev_hw = f"hw:{idx}"
+            cards.append({
+                "index": idx,
+                "id": card_id,
+                "name": name,
+                "desc": desc,
+                "hw": dev_hw,
+                "is_active": (cur_dev == dev_hw or (cur_dev == "auto" and "USB" in card_id))
+            })
+    except Exception:
+        pass
+    return cards
+
 def send_fifo(cmd):
     if os.path.exists(FIFO_PATH):
         try:
@@ -103,6 +183,17 @@ def send_fifo(cmd):
 def restart_service():
     svc = get_service_name()
     subprocess.call(["sudo", "systemctl", "restart", svc])
+
+def restart_jack():
+    for svc in ["jnam-jack.service", "jack.service"]:
+        try:
+            if subprocess.call(["systemctl", "is-active", "--quiet", svc]) == 0:
+                subprocess.call(["sudo", "systemctl", "restart", svc])
+                restart_service()
+                return True
+        except Exception:
+            pass
+    return False
 
 def cmd_status(args=None):
     print(f"\n{BOLD}{CYAN}======================================================{RESET}")
@@ -125,6 +216,23 @@ def cmd_status(args=None):
     except Exception:
         rig_stat = f"{RED}Inactive{RESET}"
     print(f"  {BOLD}JNAM Rig Service:{RESET}    {rig_stat} {DIM}({svc}){RESET}")
+
+    # Hardware & Channels
+    cur_dev = get_audio_device()
+    cards = get_alsa_cards()
+    active_card_name = cur_dev
+    for c in cards:
+        if c["is_active"]:
+            active_card_name = f"{c['name']} [{c['hw']}]"
+            break
+    print(f"  {BOLD}Audio Hardware:{RESET}      {GREEN}{active_card_name}{RESET} {DIM}[conf: {cur_dev}]{RESET}")
+
+    in_chan = get_input_channel()
+    in_desc = "Input 1 (Mic) & Input 2 (Guitar) [Summed]" if in_chan == "both" else (f"Input {in_chan} Only")
+    out_chan = get_output_channel()
+    out_desc = "Stereo (Playback 1 & 2)" if out_chan == "stereo" else (f"Playback {out_chan} Only")
+    print(f"  {BOLD}Input Channel:{RESET}       {CYAN}{in_desc}{RESET}")
+    print(f"  {BOLD}Output Channel:{RESET}      {CYAN}{out_desc}{RESET}")
 
     # Active Model
     cur_m = get_current_model()
@@ -191,6 +299,53 @@ def cmd_status(args=None):
     except Exception:
         print("    (JACK not running or routing unavailable)")
     print()
+
+def cmd_device(args):
+    cards = get_alsa_cards()
+    if not args.name_or_hw:
+        print(f"\n{BOLD}{CYAN}=== Available Audio Devices ==={RESET}")
+        print("   0) auto - Auto-detect USB interface")
+        for c in cards:
+            active_str = f" {GREEN}[*]{RESET}" if c["is_active"] else "    "
+            print(f"{active_str} {c['hw']}: {c['name']} ({c['desc']})")
+        print()
+        return
+
+    target = args.name_or_hw.strip()
+    if target == "0" or target.lower() == "auto":
+        set_audio_device("auto")
+        print(f"{GREEN}Audio device set to: Auto-detect{RESET}")
+    else:
+        if not target.startswith("hw:"):
+            target = f"hw:{target}"
+        set_audio_device(target)
+        print(f"{GREEN}Audio device set to: {target}{RESET}")
+
+    print("Restarting JACK audio server...")
+    restart_jack()
+    cmd_status()
+
+def cmd_channel(args):
+    which = args.direction.lower()
+    val = args.channel.lower()
+    if which in ["in", "input"]:
+        if val not in ["both", "1", "2"]:
+            print(f"{RED}Invalid input channel. Options: both, 1, 2{RESET}")
+            return
+        set_input_channel(val)
+        print(f"{GREEN}Input channel set to: {val}{RESET}")
+    elif which in ["out", "output"]:
+        if val not in ["stereo", "1", "2"]:
+            print(f"{RED}Invalid output channel. Options: stereo, 1, 2{RESET}")
+            return
+        set_output_channel(val)
+        print(f"{GREEN}Output channel set to: {val}{RESET}")
+    else:
+        print(f"{RED}Unknown direction: {which}. Use 'in' or 'out'{RESET}")
+        return
+
+    restart_service()
+    cmd_status()
 
 def cmd_list(args=None):
     models = get_models()
@@ -291,7 +446,6 @@ def cmd_model(args):
             print("\nCancelled.")
             return
 
-    # Update symlink
     if os.path.lexists(CURRENT_MODEL):
         os.remove(CURRENT_MODEL)
     os.symlink(target, CURRENT_MODEL)
@@ -345,7 +499,6 @@ def cmd_ir(args):
             print("\nCancelled.")
             return
 
-    # Update symlink
     if os.path.lexists(CURRENT_IR):
         os.remove(CURRENT_IR)
     os.symlink(target_ir, CURRENT_IR)
@@ -425,6 +578,15 @@ def main():
     # list
     subparsers.add_parser("list", help="List all available NAM models and Cab IRs")
 
+    # device
+    p_dev = subparsers.add_parser("device", help="View or switch audio hardware (ALSA soundcard)")
+    p_dev.add_argument("name_or_hw", nargs="?", help="Card hw:X or 'auto' (e.g. hw:1 or auto)")
+
+    # channel
+    p_chan = subparsers.add_parser("channel", help="Set input or output routing")
+    p_chan.add_argument("direction", choices=["in", "out"], help="Direction: in or out")
+    p_chan.add_argument("channel", help="For 'in': both, 1, 2. For 'out': stereo, 1, 2")
+
     # cab
     p_cab = subparsers.add_parser("cab", help="Control Cab IR (on, off, auto, status)")
     p_cab.add_argument("action", nargs="?", default="status", choices=["on", "off", "bypass", "auto", "status"], help="Action: on, off, auto, or status")
@@ -463,6 +625,10 @@ def main():
         cmd_status()
     elif args.command == "list":
         cmd_list()
+    elif args.command == "device":
+        cmd_device(args)
+    elif args.command == "channel":
+        cmd_channel(args)
     elif args.command == "cab":
         cmd_cab(args)
     elif args.command == "model":

@@ -41,7 +41,7 @@
       <div class="chain-node active" id="node-in">
         <span class="node-icon">🎸</span>
         <span class="node-label">CAPTURE</span>
-        <span class="node-sub">Focusrite 1/2</span>
+        <span class="node-sub" id="chain-in-label">In 1 + 2</span>
       </div>
       <div class="chain-wire active"></div>
       <div class="chain-node active" id="node-nam">
@@ -59,7 +59,7 @@
       <div class="chain-node active" id="node-out">
         <span class="node-icon">🎧</span>
         <span class="node-label">PLAYBACK</span>
-        <span class="node-sub">Stereo Out</span>
+        <span class="node-sub" id="chain-out-label">Stereo</span>
       </div>
     </section>
 
@@ -96,7 +96,6 @@
           <span class="badge" id="cab-badge">BYPASSED</span>
         </div>
         <div class="card-body">
-          <!-- Stompbox Mode Switcher -->
           <div class="cab-mode-selector">
             <button class="mode-btn active" data-mode="auto" id="btn-cab-auto">
               AUTO
@@ -120,6 +119,46 @@
           </div>
           <div class="cab-info-banner" id="cab-info-banner">
             Cabinet IR automatically bypassed because the loaded model already contains a physical cabinet and microphone capture.
+          </div>
+        </div>
+      </section>
+
+      <!-- Audio Hardware & Routing Card -->
+      <section class="card hardware-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="accent-dot cyan"></span> AUDIO HARDWARE & CHANNELS
+          </div>
+          <span class="badge active" id="device-badge">FOCUSRITE</span>
+        </div>
+        <div class="card-body hardware-body">
+          <!-- Device Selection -->
+          <div class="selector-group">
+            <label for="select-audio-device">Audio Interface (ALSA Soundcard)</label>
+            <select id="select-audio-device" class="custom-select">
+              <option value="auto">Auto-Detect USB Interface</option>
+            </select>
+          </div>
+
+          <!-- Channel Selection Rows -->
+          <div class="channel-routing-grid">
+            <div class="routing-control-group">
+              <label>Input Channel</label>
+              <div class="channel-btn-group" id="in-channel-group">
+                <button class="chan-btn active" data-chan="both">Both (1+2)</button>
+                <button class="chan-btn" data-chan="1">In 1 (Mic)</button>
+                <button class="chan-btn" data-chan="2">In 2 (Guitar)</button>
+              </div>
+            </div>
+
+            <div class="routing-control-group">
+              <label>Output Routing</label>
+              <div class="channel-btn-group" id="out-channel-group">
+                <button class="chan-btn active" data-chan="stereo">Stereo (1+2)</button>
+                <button class="chan-btn" data-chan="1">Left (1)</button>
+                <button class="chan-btn" data-chan="2">Right (2)</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -170,7 +209,7 @@
     <!-- Footer -->
     <footer class="app-footer">
       <span>JNAM Engine &bull; Zero-Latency PREEMPT_RT Audio Rig</span>
-      <span class="footer-dim">Controlling Focusrite Scarlett Solo &bull; Allwinner H616 1.5GHz</span>
+      <span class="footer-dim" id="footer-hardware-info">Focusrite Scarlett Solo &bull; Allwinner H616 1.5GHz</span>
     </footer>
   </div>
 

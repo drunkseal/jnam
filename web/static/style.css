@@ -194,7 +194,7 @@ body {
   font-family: 'JetBrains Mono', monospace;
   color: var(--color-cyan);
   margin-top: 2px;
-  max-width: 90px;
+  max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -307,7 +307,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 12px;
 }
 
 .selector-group label {
@@ -395,7 +394,66 @@ body {
   border: 1px dashed rgba(245, 158, 11, 0.3);
   padding: 8px 12px;
   border-radius: var(--radius-md);
-  margin-top: 10px;
+  margin-top: 6px;
+}
+
+/* Audio Hardware & Channel Routing Grid */
+.hardware-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.channel-routing-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.routing-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.routing-control-group label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+}
+
+.channel-btn-group {
+  display: flex;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 3px;
+}
+
+.chan-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 8px 4px;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.chan-btn:hover {
+  color: #fff;
+}
+
+.chan-btn.active {
+  background: var(--border);
+  color: var(--color-cyan);
+  box-shadow: 0 0 10px rgba(0, 210, 255, 0.2);
 }
 
 /* Quality Switcher */
@@ -532,6 +590,9 @@ body {
     padding: 12px;
   }
   .main-grid {
+    grid-template-columns: 1fr;
+  }
+  .channel-routing-grid {
     grid-template-columns: 1fr;
   }
 }
