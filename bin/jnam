@@ -1,0 +1,484 @@
+#!/usr/bin/env python3
+"""
+JNAM Command-Line Interface - Manage models, cab IRs, gain, quality, and services.
+"""
+import os
+import sys
+import glob
+import json
+import subprocess
+import argparse
+
+NAM_DIR = os.environ.get("JNAM_DIR", os.path.expanduser("~/nam"))
+MODELS_DIR = os.path.join(NAM_DIR, "models")
+IRS_DIR = os.path.join(NAM_DIR, "irs")
+CURRENT_MODEL = os.path.join(NAM_DIR, "current_model.nam")
+CURRENT_IR = os.path.join(NAM_DIR, "current_ir.wav")
+CAB_CONF = os.path.join(NAM_DIR, "cab.conf")
+CAB_MODE_FILE = os.path.join(NAM_DIR, "cab_mode")
+FIFO_PATH = "/tmp/nam_control.fifo"
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RED = "\033[91m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+RESET = "\033[0m"
+
+def get_service_name():
+    for svc in ["jnam.service", "nam-rig.service"]:
+        try:
+            out = subprocess.check_output(["systemctl", "is-active", svc], stderr=subprocess.DEVNULL).decode().strip()
+            if out == "active":
+                return svc
+        except Exception:
+            pass
+    return "jnam.service"
+
+def get_models():
+    return sorted(glob.glob(os.path.join(MODELS_DIR, "**/*.nam"), recursive=True))
+
+def get_irs():
+    return sorted(glob.glob(os.path.join(IRS_DIR, "**/*.wav"), recursive=True))
+
+def get_current_model():
+    if os.path.islink(CURRENT_MODEL):
+        return os.path.realpath(CURRENT_MODEL)
+    return None
+
+def get_current_ir():
+    if os.path.islink(CURRENT_IR):
+        return os.path.realpath(CURRENT_IR)
+    return None
+
+def get_model_metadata(model_path):
+    if not model_path or not os.path.exists(model_path):
+        return {}
+    try:
+        with open(model_path, "r", encoding="utf-8", errors="ignore") as f:
+            data = json.load(f)
+            return data.get("metadata", {})
+    except Exception:
+        return {}
+
+def get_cab_mode():
+    if os.path.exists(CAB_MODE_FILE):
+        try:
+            with open(CAB_MODE_FILE, "r") as f:
+                return f.read().strip().lower()
+        except Exception:
+            return "auto"
+    return "auto"
+
+def set_cab_mode(mode):
+    os.makedirs(NAM_DIR, exist_ok=True)
+    with open(CAB_MODE_FILE, "w") as f:
+        f.write(mode.strip().lower() + "\n")
+
+def is_cab_effective_enabled():
+    mode = get_cab_mode()
+    if mode == "on":
+        return True
+    elif mode in ["off", "bypass"]:
+        return False
+    else:  # auto
+        cur_m = get_current_model()
+        meta = get_model_metadata(cur_m)
+        gear_type = meta.get("gear_type", "")
+        if gear_type == "amp_cab":
+            return False
+        return True
+
+def send_fifo(cmd):
+    if os.path.exists(FIFO_PATH):
+        try:
+            with open(FIFO_PATH, "w") as fp:
+                fp.write(cmd + "\n")
+            return True
+        except Exception:
+            return False
+    return False
+
+def restart_service():
+    svc = get_service_name()
+    subprocess.call(["sudo", "systemctl", "restart", svc])
+
+def cmd_status(args=None):
+    print(f"\n{BOLD}{CYAN}======================================================{RESET}")
+    print(f"{BOLD}{CYAN}       JNAM - Real-Time Neural Amp Rig Status         {RESET}")
+    print(f"{BOLD}{CYAN}======================================================{RESET}")
+
+    # JACK status
+    try:
+        jack_active = subprocess.call(["jack_wait", "-c"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+        jack_stat = f"{GREEN}Running{RESET}" if jack_active else f"{RED}Stopped{RESET}"
+    except Exception:
+        jack_stat = f"{YELLOW}Unknown{RESET}"
+    print(f"  {BOLD}JACK2 Audio Server:{RESET}  {jack_stat}")
+
+    # Rig service status
+    svc = get_service_name()
+    try:
+        rig_active = subprocess.check_output(["systemctl", "is-active", svc], stderr=subprocess.DEVNULL).decode().strip()
+        rig_stat = f"{GREEN}Active (running){RESET}" if rig_active == "active" else f"{YELLOW}{rig_active}{RESET}"
+    except Exception:
+        rig_stat = f"{RED}Inactive{RESET}"
+    print(f"  {BOLD}JNAM Rig Service:{RESET}    {rig_stat} {DIM}({svc}){RESET}")
+
+    # Active Model
+    cur_m = get_current_model()
+    if cur_m:
+        m_name = os.path.basename(cur_m)
+        m_folder = os.path.basename(os.path.dirname(cur_m))
+        meta = get_model_metadata(cur_m)
+        gear_type = meta.get("gear_type", "unknown")
+        if gear_type == "amp_cab":
+            type_tag = f"{CYAN}[Full Rig: Amp + Cab + Mic]{RESET}"
+        elif gear_type == "amp":
+            type_tag = f"{YELLOW}[DI / Direct: Amp Only]{RESET}"
+        else:
+            type_tag = f"{DIM}[{gear_type}]{RESET}"
+        print(f"  {BOLD}Active Model:{RESET}        {GREEN}{m_folder} / {m_name}{RESET} {type_tag}")
+    else:
+        print(f"  {BOLD}Active Model:{RESET}        {YELLOW}None selected{RESET}")
+
+    # Active Cab IR and Mode
+    cab_mode = get_cab_mode()
+    cab_active = is_cab_effective_enabled()
+    cur_ir = get_current_ir()
+    ir_desc = os.path.basename(cur_ir) if cur_ir else "None"
+    
+    if cab_active:
+        cab_status_str = f"{GREEN}Active{RESET} ({ir_desc})"
+    else:
+        cab_status_str = f"{YELLOW}BYPASSED{RESET} (Direct to playback, no Cab IR)"
+    print(f"  {BOLD}Cab IR State:{RESET}        {cab_status_str} {DIM}[mode: {cab_mode}]{RESET}")
+
+    # Real-Time Engine Processes
+    try:
+        ps_out = subprocess.check_output(["ps", "-eo", "pid,rtprio,comm,%cpu,%mem"], stderr=subprocess.DEVNULL).decode()
+        print(f"\n  {BOLD}Real-Time Engine Processes:{RESET}")
+        matched = False
+        for line in ps_out.splitlines():
+            if any(k in line for k in ["jackd", "jalv", "jconvolver", "aj-snapshot"]):
+                print(f"    {line.strip()}")
+                matched = True
+        if not matched:
+            print("    (No rig processes running)")
+    except Exception:
+        pass
+
+    # Audio Signal Routing
+    print(f"\n  {BOLD}Audio Signal Chain (JACK Routing):{RESET}")
+    try:
+        lsp_out = subprocess.check_output(["jack_lsp", "-c"], stderr=subprocess.DEVNULL).decode().splitlines()
+        connections = {}
+        cur_port = None
+        for line in lsp_out:
+            if not line.startswith("   "):
+                cur_port = line.strip()
+                connections[cur_port] = []
+            else:
+                if cur_port:
+                    connections[cur_port].append(line.strip())
+
+        flow_order = ["system:capture_1", "system:capture_2", "nam:output", "cab:out"]
+        for p in flow_order:
+            if p in connections and connections[p]:
+                dests = ", ".join(connections[p])
+                print(f"    {CYAN}{p:18}{RESET} ──> {GREEN}{dests}{RESET}")
+    except Exception:
+        print("    (JACK not running or routing unavailable)")
+    print()
+
+def cmd_list(args=None):
+    models = get_models()
+    cur_m = get_current_model()
+    print(f"\n{BOLD}{CYAN}=== Available NAM Models ==={RESET}")
+    if not models:
+        print(f"  {DIM}(No .nam models found in {MODELS_DIR}){RESET}")
+    for idx, m in enumerate(models, 1):
+        is_cur = (m == cur_m)
+        marker = f"{GREEN}[*]{RESET}" if is_cur else "   "
+        folder = os.path.basename(os.path.dirname(m))
+        filename = os.path.basename(m)
+        meta = get_model_metadata(m)
+        gear_type = meta.get("gear_type", "")
+        if gear_type == "amp_cab":
+            tag = f"{CYAN}[Full Rig: Cab Baked-in]{RESET}"
+        elif gear_type == "amp":
+            tag = f"{YELLOW}[DI Capture: Needs Cab IR]{RESET}"
+        else:
+            tag = ""
+        print(f" {marker} {idx:2d}) {folder} / {filename} {tag}")
+
+    irs = get_irs()
+    cur_ir = get_current_ir()
+    print(f"\n{BOLD}{CYAN}=== Available Cab IRs (for DI models) ==={RESET}")
+    if not irs:
+        print(f"  {DIM}(No .wav IRs found in {IRS_DIR}){RESET}")
+    for idx, ir in enumerate(irs, 1):
+        is_cur = (ir == cur_ir)
+        marker = f"{GREEN}[*]{RESET}" if is_cur else "   "
+        folder = os.path.basename(os.path.dirname(ir))
+        filename = os.path.basename(ir)
+        print(f" {marker} {idx:2d}) {folder} / {filename}")
+    print()
+
+def cmd_cab(args):
+    action = args.action.lower() if args.action else "status"
+    if action in ["on", "enable"]:
+        set_cab_mode("on")
+        print(f"{GREEN}Cab IR set to: FORCE ON{RESET}")
+    elif action in ["off", "disable", "bypass"]:
+        set_cab_mode("off")
+        print(f"{YELLOW}Cab IR set to: BYPASSED (Disabled){RESET}")
+    elif action in ["auto"]:
+        set_cab_mode("auto")
+        print(f"{CYAN}Cab IR set to: AUTO-DETECT{RESET}")
+        cur_m = get_current_model()
+        meta = get_model_metadata(cur_m)
+        if meta.get("gear_type") == "amp_cab":
+            print(f"  -> Model has baked-in cab ({CYAN}amp_cab{RESET}). Cab IR will be {YELLOW}BYPASSED{RESET}.")
+        else:
+            print(f"  -> Model is DI capture. Cab IR will be {GREEN}ENABLED{RESET}.")
+    elif action == "status":
+        mode = get_cab_mode()
+        active = is_cab_effective_enabled()
+        state = f"{GREEN}Active{RESET}" if active else f"{YELLOW}Bypassed{RESET}"
+        print(f"Cab IR Mode: {BOLD}{mode}{RESET} (Currently: {state})")
+        return
+    else:
+        print(f"{RED}Unknown action: {action}. Use 'on', 'off', 'auto', or 'status'{RESET}")
+        return
+
+    print("Applying changes to JNAM rig...")
+    restart_service()
+    cmd_status()
+
+def cmd_model(args):
+    models = get_models()
+    if not models:
+        print(f"{RED}No models found in {MODELS_DIR}{RESET}")
+        return
+
+    target = None
+    if args.name_or_index:
+        arg = args.name_or_index
+        if arg.isdigit():
+            idx = int(arg) - 1
+            if 0 <= idx < len(models):
+                target = models[idx]
+        if not target:
+            for m in models:
+                if arg.lower() in m.lower():
+                    target = m
+                    break
+        if not target:
+            print(f"{RED}Could not match model: {arg}{RESET}")
+            return
+    else:
+        cmd_list()
+        try:
+            choice = input(f"{BOLD}Select Model [1-{len(models)}]: {RESET}").strip()
+            if choice.isdigit() and 1 <= int(choice) <= len(models):
+                target = models[int(choice) - 1]
+            else:
+                print("Cancelled.")
+                return
+        except (KeyboardInterrupt, EOFError):
+            print("\nCancelled.")
+            return
+
+    # Update symlink
+    if os.path.lexists(CURRENT_MODEL):
+        os.remove(CURRENT_MODEL)
+    os.symlink(target, CURRENT_MODEL)
+
+    print(f"\n{GREEN}Selected Model:{RESET} {os.path.basename(target)}")
+
+    meta = get_model_metadata(target)
+    gear_type = meta.get("gear_type", "")
+    cab_mode = get_cab_mode()
+    if cab_mode == "auto":
+        if gear_type == "amp_cab":
+            print(f"  {CYAN}[Auto-Cab]{RESET} Model is Full Rig (Amp + Cab + Mic). Cab IR automatically {YELLOW}BYPASSED{RESET}.")
+        else:
+            print(f"  {CYAN}[Auto-Cab]{RESET} Model is DI / Direct capture. Cab IR automatically {GREEN}ENABLED{RESET}.")
+
+    print("Reloading JNAM engine...")
+    restart_service()
+    cmd_status()
+
+def cmd_ir(args):
+    irs = get_irs()
+    if not irs:
+        print(f"{RED}No IRs found in {IRS_DIR}{RESET}")
+        return
+
+    target_ir = None
+    if args.name_or_index:
+        arg = args.name_or_index
+        if arg.isdigit():
+            idx = int(arg) - 1
+            if 0 <= idx < len(irs):
+                target_ir = irs[idx]
+        if not target_ir:
+            for ir in irs:
+                if arg.lower() in ir.lower():
+                    target_ir = ir
+                    break
+        if not target_ir:
+            print(f"{RED}Could not match IR: {arg}{RESET}")
+            return
+    else:
+        cmd_list()
+        try:
+            choice = input(f"{BOLD}Select Cab IR [1-{len(irs)}]: {RESET}").strip()
+            if choice.isdigit() and 1 <= int(choice) <= len(irs):
+                target_ir = irs[int(choice) - 1]
+            else:
+                print("Cancelled.")
+                return
+        except (KeyboardInterrupt, EOFError):
+            print("\nCancelled.")
+            return
+
+    # Update symlink
+    if os.path.lexists(CURRENT_IR):
+        os.remove(CURRENT_IR)
+    os.symlink(target_ir, CURRENT_IR)
+
+    with open(CAB_CONF, "w") as fp:
+        fp.write(f"""/convolver/new 1 1 128 2048 1.0\n/input/name 1 in\n/output/name 1 out\n/impulse/read 1 1 1 0 0 0 1 "{CURRENT_IR}"\n""")
+
+    print(f"\n{GREEN}Selected Cab IR:{RESET} {os.path.basename(target_ir)}")
+
+    cab_mode = get_cab_mode()
+    if cab_mode in ["off", "bypass"]:
+        print(f"{YELLOW}Note: Cab IR is currently BYPASSED. Run 'jnam cab on' to activate it.{RESET}")
+
+    print("Reloading JNAM engine...")
+    restart_service()
+    cmd_status()
+
+def cmd_gain(args):
+    which = args.channel.lower()
+    val = float(args.value)
+    if "in" in which:
+        sym = "input_level"
+    elif "out" in which:
+        sym = "output_level"
+    else:
+        print(f"{RED}Invalid channel. Use in or out{RESET}")
+        return
+    cmd = f"{sym} = {val}"
+    if send_fifo(cmd):
+        print(f"{GREEN}Live adjusted {sym} = {val} dB{RESET}")
+    else:
+        print(f"{YELLOW}Warning: Rig not running or FIFO busy. Could not set live gain.{RESET}")
+
+def cmd_quality(args):
+    val = float(args.value)
+    if not (0.0 <= val <= 1.0):
+        print(f"{RED}Quality scale must be between 0.0 (Lite) and 1.0 (Full){RESET}")
+        return
+    cmd = f"quality_scale = {val}"
+    if send_fifo(cmd):
+        mode = "Lite (Low CPU)" if val == 0.0 else ("Full (High Quality)" if val == 1.0 else f"{val:.2f}")
+        print(f"{GREEN}Live adjusted quality_scale = {val} [{mode}]{RESET}")
+    else:
+        print(f"{YELLOW}Warning: Rig not running or FIFO busy. Could not set live quality.{RESET}")
+
+def cmd_web(args):
+    port = args.port or 8080
+    host = args.host or "0.0.0.0"
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    web_server = os.path.join(os.path.dirname(script_dir), "web", "server.py")
+    if not os.path.exists(web_server):
+        web_server = "/opt/jnam/web/server.py"
+    if os.path.exists(web_server):
+        subprocess.call([sys.executable, web_server, str(port)])
+    else:
+        print(f"{RED}Web server script not found: {web_server}{RESET}")
+
+def cmd_service(action):
+    svc = get_service_name()
+    subprocess.call(["sudo", "systemctl", action, svc])
+    cmd_status()
+
+def cmd_logs(args):
+    svc = get_service_name()
+    try:
+        subprocess.call(["journalctl", "-u", svc, "-n", "30", "--no-pager"])
+    except Exception:
+        pass
+
+def main():
+    parser = argparse.ArgumentParser(description="JNAM - JACK Neural Amp Modeler Suite", prog="jnam")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # status
+    subparsers.add_parser("status", help="Show current rig status and signal chain")
+
+    # list
+    subparsers.add_parser("list", help="List all available NAM models and Cab IRs")
+
+    # cab
+    p_cab = subparsers.add_parser("cab", help="Control Cab IR (on, off, auto, status)")
+    p_cab.add_argument("action", nargs="?", default="status", choices=["on", "off", "bypass", "auto", "status"], help="Action: on, off, auto, or status")
+
+    # model
+    p_model = subparsers.add_parser("model", help="Select active NAM model")
+    p_model.add_argument("name_or_index", nargs="?", help="Index number or keyword")
+
+    # ir
+    p_ir = subparsers.add_parser("ir", help="Select active Cab IR")
+    p_ir.add_argument("name_or_index", nargs="?", help="Index number or keyword")
+
+    # gain
+    p_gain = subparsers.add_parser("gain", help="Adjust input or output level (in dB)")
+    p_gain.add_argument("channel", choices=["in", "out", "input", "output"], help="Channel: in or out")
+    p_gain.add_argument("value", type=float, help="Gain in dB (e.g. 3.0 or -2.5)")
+
+    # quality
+    p_quality = subparsers.add_parser("quality", help="Set quality scale (0.0=Lite, 1.0=Full)")
+    p_quality.add_argument("value", type=float, help="Value between 0.0 and 1.0")
+
+    # web
+    p_web = subparsers.add_parser("web", help="Start the Web UI controller server")
+    p_web.add_argument("--port", type=int, default=8080, help="Port to listen on (default: 8080)")
+    p_web.add_argument("--host", default="0.0.0.0", help="Host interface (default: 0.0.0.0)")
+
+    # start / stop / restart / logs
+    subparsers.add_parser("start", help="Start JNAM rig service")
+    subparsers.add_parser("stop", help="Stop JNAM rig service")
+    subparsers.add_parser("restart", help="Restart JNAM rig service")
+    subparsers.add_parser("logs", help="View recent logs from systemd")
+
+    args = parser.parse_args()
+
+    if not args.command or args.command == "status":
+        cmd_status()
+    elif args.command == "list":
+        cmd_list()
+    elif args.command == "cab":
+        cmd_cab(args)
+    elif args.command == "model":
+        cmd_model(args)
+    elif args.command == "ir":
+        cmd_ir(args)
+    elif args.command == "gain":
+        cmd_gain(args)
+    elif args.command == "quality":
+        cmd_quality(args)
+    elif args.command == "web":
+        cmd_web(args)
+    elif args.command in ["start", "stop", "restart"]:
+        cmd_service(args.command)
+    elif args.command == "logs":
+        cmd_logs(args)
+
+if __name__ == "__main__":
+    main()

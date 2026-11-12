@@ -1,0 +1,16 @@
+[Unit]
+Description=JACK2 Real-Time Audio Server for JNAM
+After=sound.target
+
+[Service]
+Type=simple
+User=root
+Group=audio
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+ExecStart=/opt/jnam/scripts/start-jack.sh
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

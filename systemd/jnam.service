@@ -1,0 +1,19 @@
+[Unit]
+Description=JNAM Audio Rig - Neural Amp Modeler + Cab Engine on JACK2
+Requires=jnam-jack.service
+After=jnam-jack.service
+
+[Service]
+Type=simple
+User=root
+Group=audio
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+Environment=JNAM_DIR=/var/lib/jnam
+ExecStart=/opt/jnam/scripts/start-jnam.sh
+ExecStop=/opt/jnam/scripts/stop-jnam.sh
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

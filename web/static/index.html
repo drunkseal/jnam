@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>JNAM - Real-Time Neural Amp Rig</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header / Status Bar -->
+    <header class="top-bar">
+      <div class="brand">
+        <div class="logo-badge">JNAM</div>
+        <div class="brand-sub">JACK Neural Amp Modeler</div>
+      </div>
+      <div class="status-pills">
+        <div class="pill" id="pill-jack">
+          <span class="led red" id="led-jack"></span> JACK: <span id="txt-jack">OFFLINE</span>
+        </div>
+        <div class="pill" id="pill-rig">
+          <span class="led red" id="led-rig"></span> RIG: <span id="txt-rig">INACTIVE</span>
+        </div>
+        <div class="pill pill-cpu">
+          CPU: <span id="txt-cpu" class="val-hl">0.0%</span>
+        </div>
+      </div>
+      <button class="btn-icon" id="btn-restart" title="Restart Audio Engine">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M23 4v6h-6"></path>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Signal Chain Diagram -->
+    <section class="signal-chain-card">
+      <div class="chain-node active" id="node-in">
+        <span class="node-icon">🎸</span>
+        <span class="node-label">CAPTURE</span>
+        <span class="node-sub">Focusrite 1/2</span>
+      </div>
+      <div class="chain-wire active"></div>
+      <div class="chain-node active" id="node-nam">
+        <span class="node-icon">⚡</span>
+        <span class="node-label">NAM A2</span>
+        <span class="node-sub" id="chain-nam-name">Model</span>
+      </div>
+      <div class="chain-wire active" id="wire-cab"></div>
+      <div class="chain-node" id="node-cab">
+        <span class="node-icon">🔊</span>
+        <span class="node-label">CAB IR</span>
+        <span class="node-sub" id="chain-cab-state">BYPASSED</span>
+      </div>
+      <div class="chain-wire active"></div>
+      <div class="chain-node active" id="node-out">
+        <span class="node-icon">🎧</span>
+        <span class="node-label">PLAYBACK</span>
+        <span class="node-sub">Stereo Out</span>
+      </div>
+    </section>
+
+    <!-- Main Grid -->
+    <main class="main-grid">
+      <!-- Amp Model Card -->
+      <section class="card model-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="accent-dot cyan"></span> AMP MODEL
+          </div>
+          <span class="badge" id="model-badge">FULL RIG</span>
+        </div>
+        <div class="card-body">
+          <div class="current-display">
+            <div class="current-name" id="display-model-name">Loading...</div>
+            <div class="current-meta" id="display-model-meta">Analyzing model weights...</div>
+          </div>
+          <div class="selector-group">
+            <label for="select-model">Switch Model</label>
+            <select id="select-model" class="custom-select">
+              <option disabled selected>Loading models...</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cabinet IR & Bypass Card -->
+      <section class="card cab-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="accent-dot emerald"></span> CABINET IMPULSE RESPONSE
+          </div>
+          <span class="badge" id="cab-badge">BYPASSED</span>
+        </div>
+        <div class="card-body">
+          <!-- Stompbox Mode Switcher -->
+          <div class="cab-mode-selector">
+            <button class="mode-btn active" data-mode="auto" id="btn-cab-auto">
+              AUTO
+              <span class="mode-hint">Detects model type</span>
+            </button>
+            <button class="mode-btn" data-mode="on" id="btn-cab-on">
+              ACTIVE
+              <span class="mode-hint">Convolver ON</span>
+            </button>
+            <button class="mode-btn" data-mode="off" id="btn-cab-off">
+              BYPASS
+              <span class="mode-hint">Direct sound</span>
+            </button>
+          </div>
+
+          <div class="selector-group" id="ir-selector-group">
+            <label for="select-ir">Active Cab IR (for DI Models)</label>
+            <select id="select-ir" class="custom-select">
+              <option disabled selected>Loading IRs...</option>
+            </select>
+          </div>
+          <div class="cab-info-banner" id="cab-info-banner">
+            Cabinet IR automatically bypassed because the loaded model already contains a physical cabinet and microphone capture.
+          </div>
+        </div>
+      </section>
+
+      <!-- DSP Levels & Quality Card -->
+      <section class="card dsp-card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="accent-dot amber"></span> GAIN & TONE DYNAMICS
+          </div>
+          <div class="quality-toggle-group">
+            <button class="quality-btn active" data-quality="1.0" id="btn-quality-full">A2 FULL (1.0)</button>
+            <button class="quality-btn" data-quality="0.0" id="btn-quality-lite">LITE (0.0)</button>
+          </div>
+        </div>
+        <div class="card-body sliders-grid">
+          <!-- Input Gain Slider -->
+          <div class="slider-container">
+            <div class="slider-header">
+              <span class="slider-name">INPUT LEVEL</span>
+              <span class="slider-val" id="val-in-gain">0.0 dB</span>
+            </div>
+            <input type="range" id="slider-in-gain" min="-24.0" max="24.0" step="0.5" value="0.0" class="pro-slider">
+            <div class="slider-footer">
+              <button class="btn-micro" onclick="setGain('in', 0.0)">0 dB</button>
+              <button class="btn-micro" onclick="setGain('in', 3.0)">+3 dB</button>
+              <button class="btn-micro" onclick="setGain('in', 6.0)">+6 dB</button>
+            </div>
+          </div>
+
+          <!-- Output Gain Slider -->
+          <div class="slider-container">
+            <div class="slider-header">
+              <span class="slider-name">MASTER OUTPUT</span>
+              <span class="slider-val" id="val-out-gain">0.0 dB</span>
+            </div>
+            <input type="range" id="slider-out-gain" min="-24.0" max="24.0" step="0.5" value="0.0" class="pro-slider">
+            <div class="slider-footer">
+              <button class="btn-micro" onclick="setGain('out', -6.0)">-6 dB</button>
+              <button class="btn-micro" onclick="setGain('out', -3.0)">-3 dB</button>
+              <button class="btn-micro" onclick="setGain('out', 0.0)">0 dB</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <span>JNAM Engine &bull; Zero-Latency PREEMPT_RT Audio Rig</span>
+      <span class="footer-dim">Controlling Focusrite Scarlett Solo &bull; Allwinner H616 1.5GHz</span>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
