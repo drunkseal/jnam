@@ -3,41 +3,58 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>JNAM - Real-Time Neural Amp Rig</title>
+  <title>JNAM &bull; Real-Time Neural Amp Rig</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
-  <div class="app-container">
-    <!-- Header / Status Bar -->
-    <header class="top-bar">
-      <div class="brand">
-        <div class="logo-badge">JNAM</div>
-        <div class="brand-sub">JACK Neural Amp Modeler</div>
+<body class="daw-workspace">
+  <div class="rack-chassis">
+
+    <!-- Top Transport / Header Bar -->
+    <header class="rack-header">
+      <div class="rack-brand">
+        <div class="brand-badge">
+          <span class="brand-led"></span>
+          <span class="brand-text">JNAM</span>
+        </div>
+        <div class="brand-meta">
+          <span class="meta-title">JACK NEURAL AMP MODELER</span>
+          <span class="meta-stats">48 kHz &bull; 128 spl &bull; 2.67 ms</span>
+        </div>
       </div>
 
-      <div class="header-actions">
+      <div class="rack-transport">
         <!-- Tuner Trigger Button -->
-        <button class="btn-tuner-header" id="btn-tuner-open">
-          <span class="tuner-icon">🎯</span> TUNER
+        <button class="btn-rack-tuner" id="btn-tuner-open" title="Open Silent Chromatic Tuner">
+          <svg class="tuner-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+            <path d="M6 3v7a6 6 0 0 0 12 0V3M12 16v5"/>
+          </svg>
+          <span>TUNER</span>
         </button>
 
-        <div class="status-pills">
-          <div class="pill" id="pill-jack">
-            <span class="led red" id="led-jack"></span> JACK: <span id="txt-jack">OFFLINE</span>
+        <div class="transport-lcd">
+          <div class="lcd-cell" id="pill-jack">
+            <span class="meter-led red" id="led-jack"></span>
+            <span class="lcd-label">JACK</span>
+            <span class="lcd-val" id="txt-jack">OFFLINE</span>
           </div>
-          <div class="pill" id="pill-rig">
-            <span class="led red" id="led-rig"></span> RIG: <span id="txt-rig">INACTIVE</span>
+          <div class="lcd-divider"></div>
+          <div class="lcd-cell" id="pill-rig">
+            <span class="meter-led red" id="led-rig"></span>
+            <span class="lcd-label">RIG</span>
+            <span class="lcd-val" id="txt-rig">INACTIVE</span>
           </div>
-          <div class="pill pill-cpu">
-            CPU: <span id="txt-cpu" class="val-hl">0.0%</span>
+          <div class="lcd-divider"></div>
+          <div class="lcd-cell lcd-cpu">
+            <span class="lcd-label">CPU</span>
+            <span class="lcd-val val-hl" id="txt-cpu">0.0%</span>
           </div>
         </div>
 
-        <button class="btn-icon" id="btn-restart" title="Restart Audio Engine">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2">
+        <button class="btn-transport-tool" id="btn-restart" title="Restart Audio Rig">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 4v6h-6"></path>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
           </svg>
@@ -45,136 +62,217 @@
       </div>
     </header>
 
-    <!-- Signal Chain Diagram -->
-    <section class="signal-chain-card">
-      <div class="chain-node active" id="node-in">
-        <span class="node-icon">🎸</span>
-        <span class="node-label">CAPTURE</span>
-        <span class="node-sub" id="chain-in-label">In 1 + 2</span>
+    <!-- Signal Routing Patchbay Strip -->
+    <section class="patchbay-card">
+      <div class="patchbay-header">
+        <span class="patchbay-title">SIGNAL ROUTING MATRIX</span>
+        <span class="patchbay-status">DIRECT HARDWARE BUS &bull; ZERO LATENCY</span>
       </div>
-      <div class="chain-wire active"></div>
-      <div class="chain-node active" id="node-nam">
-        <span class="node-icon">⚡</span>
-        <span class="node-label">NAM A2</span>
-        <span class="node-sub" id="chain-nam-name">Model</span>
-      </div>
-      <div class="chain-wire active" id="wire-cab"></div>
-      <div class="chain-node" id="node-cab">
-        <span class="node-icon">🔊</span>
-        <span class="node-label">CAB IR</span>
-        <span class="node-sub" id="chain-cab-state">BYPASSED</span>
-      </div>
-      <div class="chain-wire active"></div>
-      <div class="chain-node active" id="node-out">
-        <span class="node-icon">🎧</span>
-        <span class="node-label">PLAYBACK</span>
-        <span class="node-sub" id="chain-out-label">Stereo</span>
+      <div class="patchbay-strip">
+        <div class="chain-node active" id="node-in">
+          <div class="node-icon-wrap">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="12" cy="12" r="9"/>
+              <circle cx="12" cy="12" r="3" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="node-content">
+            <span class="node-label">CAPTURE</span>
+            <span class="node-sub" id="chain-in-label">In 1 + 2</span>
+          </div>
+        </div>
+
+        <div class="chain-wire active">
+          <div class="wire-pulse"></div>
+        </div>
+
+        <div class="chain-node active" id="node-nam">
+          <div class="node-icon-wrap">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+              <path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>
+            </svg>
+          </div>
+          <div class="node-content">
+            <span class="node-label">NAM CORE</span>
+            <span class="node-sub" id="chain-nam-name">Model</span>
+          </div>
+        </div>
+
+        <div class="chain-wire active" id="wire-cab">
+          <div class="wire-pulse"></div>
+        </div>
+
+        <div class="chain-node" id="node-cab">
+          <div class="node-icon-wrap">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="12" cy="12" r="5"/>
+              <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="node-content">
+            <span class="node-label">CAB CONV</span>
+            <span class="node-sub" id="chain-cab-state">BYPASSED</span>
+          </div>
+        </div>
+
+        <div class="chain-wire active">
+          <div class="wire-pulse"></div>
+        </div>
+
+        <div class="chain-node active" id="node-out">
+          <div class="node-icon-wrap">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M3 18v-6a9 9 0 0 1 18 0v6M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+            </svg>
+          </div>
+          <div class="node-content">
+            <span class="node-label">PLAYBACK</span>
+            <span class="node-sub" id="chain-out-label">Stereo</span>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- Main Grid -->
-    <main class="main-grid">
-      <!-- Amp Model Card -->
-      <section class="card model-card">
+    <!-- Main Rack Unit Grid -->
+    <main class="rack-grid">
+
+      <!-- Module 1: Amp Model Unit -->
+      <section class="rack-card module-nam">
+        <div class="card-rack-ears"></div>
         <div class="card-header">
           <div class="card-title">
-            <span class="accent-dot cyan"></span> AMP MODEL
+            <span class="rack-indicator orange"></span> AMP MODEL LOADER
           </div>
           <span class="badge" id="model-badge">FULL RIG</span>
         </div>
         <div class="card-body">
-          <div class="current-display">
+          <div class="rack-screen">
+            <div class="screen-header">ACTIVE NEURAL PROFILE</div>
             <div class="current-name" id="display-model-name">Loading...</div>
             <div class="current-meta" id="display-model-meta">Analyzing model weights...</div>
           </div>
           <div class="selector-group">
-            <label for="select-model">Switch Model</label>
-            <select id="select-model" class="custom-select">
-              <option disabled selected>Loading models...</option>
-            </select>
+            <label for="select-model" class="field-label">BROWSE MODEL ARCHIVE</label>
+            <div class="select-wrapper">
+              <select id="select-model" class="custom-select">
+                <option disabled selected>Loading models...</option>
+              </select>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- Cabinet IR & Bypass Card -->
-      <section class="card cab-card">
+      <!-- Module 2: Cabinet IR & Bypass Unit -->
+      <section class="rack-card module-cab">
+        <div class="card-rack-ears"></div>
         <div class="card-header">
           <div class="card-title">
-            <span class="accent-dot emerald"></span> CABINET IMPULSE RESPONSE
+            <span class="rack-indicator green"></span> CABINET CONVOLVER
           </div>
           <span class="badge" id="cab-badge">BYPASSED</span>
         </div>
         <div class="card-body">
+          <div class="field-label">CABINET IR OPERATING MODE</div>
           <div class="cab-mode-selector">
             <button class="mode-btn active" data-mode="auto" id="btn-cab-auto">
-              AUTO
-              <span class="mode-hint">Detects model type</span>
+              <span class="mode-led"></span>
+              <span class="mode-text">AUTO</span>
+              <span class="mode-hint">Detects Baked-in Cab</span>
             </button>
             <button class="mode-btn" data-mode="on" id="btn-cab-on">
-              ACTIVE
+              <span class="mode-led"></span>
+              <span class="mode-text">ACTIVE</span>
               <span class="mode-hint">Convolver ON</span>
             </button>
             <button class="mode-btn" data-mode="off" id="btn-cab-off">
-              BYPASS
-              <span class="mode-hint">Direct sound</span>
+              <span class="mode-led"></span>
+              <span class="mode-text">BYPASS</span>
+              <span class="mode-hint">Direct Sound</span>
             </button>
           </div>
 
           <div class="selector-group" id="ir-selector-group">
-            <label for="select-ir">Active Cab IR (for DI Models)</label>
-            <select id="select-ir" class="custom-select">
-              <option disabled selected>Loading IRs...</option>
-            </select>
+            <label for="select-ir" class="field-label">IMPULSE RESPONSE (.WAV)</label>
+            <div class="select-wrapper">
+              <select id="select-ir" class="custom-select">
+                <option disabled selected>Loading IRs...</option>
+              </select>
+            </div>
           </div>
+
           <div class="cab-info-banner" id="cab-info-banner">
             Cabinet IR automatically bypassed because the loaded model already contains a physical cabinet and microphone capture.
           </div>
         </div>
       </section>
 
-      <!-- Audio Hardware & Routing Card -->
-      <section class="card hardware-card">
+      <!-- Module 3: Audio Hardware & Routing Matrix -->
+      <section class="rack-card module-hw">
+        <div class="card-rack-ears"></div>
         <div class="card-header">
           <div class="card-title">
-            <span class="accent-dot cyan"></span> AUDIO HARDWARE & CHANNELS
+            <span class="rack-indicator blue"></span> AUDIO HARDWARE & I/O ROUTING
           </div>
           <span class="badge active" id="device-badge">FOCUSRITE</span>
         </div>
         <div class="card-body hardware-body">
           <div class="selector-group">
-            <label for="select-audio-device">Audio Interface (ALSA Soundcard)</label>
-            <select id="select-audio-device" class="custom-select">
-              <option value="auto">Auto-Detect USB Interface</option>
-            </select>
+            <label for="select-audio-device" class="field-label">ACTIVE ALSA SOUNDCARD</label>
+            <div class="select-wrapper">
+              <select id="select-audio-device" class="custom-select">
+                <option value="auto">Auto-Detect USB Interface</option>
+              </select>
+            </div>
           </div>
 
           <div class="channel-routing-grid">
             <div class="routing-control-group">
-              <label>Input Channel</label>
+              <label class="field-label">HARDWARE INPUT ROUTING</label>
               <div class="channel-btn-group" id="in-channel-group">
-                <button class="chan-btn active" data-chan="both">Both (1+2)</button>
-                <button class="chan-btn" data-chan="1">In 1 (Mic)</button>
-                <button class="chan-btn" data-chan="2">In 2 (Guitar)</button>
+                <button class="chan-btn active" data-chan="both">
+                  <span class="chan-led"></span>
+                  <span>Both (1+2)</span>
+                </button>
+                <button class="chan-btn" data-chan="1">
+                  <span class="chan-led"></span>
+                  <span>In 1 (Mic)</span>
+                </button>
+                <button class="chan-btn" data-chan="2">
+                  <span class="chan-led"></span>
+                  <span>In 2 (Guitar)</span>
+                </button>
               </div>
             </div>
 
             <div class="routing-control-group">
-              <label>Output Routing</label>
+              <label class="field-label">MASTER OUTPUT ROUTING</label>
               <div class="channel-btn-group" id="out-channel-group">
-                <button class="chan-btn active" data-chan="stereo">Stereo (1+2)</button>
-                <button class="chan-btn" data-chan="1">Left (1)</button>
-                <button class="chan-btn" data-chan="2">Right (2)</button>
+                <button class="chan-btn active" data-chan="stereo">
+                  <span class="chan-led"></span>
+                  <span>Stereo (1+2)</span>
+                </button>
+                <button class="chan-btn" data-chan="1">
+                  <span class="chan-led"></span>
+                  <span>Left (1)</span>
+                </button>
+                <button class="chan-btn" data-chan="2">
+                  <span class="chan-led"></span>
+                  <span>Right (2)</span>
+                </button>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- DSP Levels & Quality Card -->
-      <section class="card dsp-card">
+      <!-- Module 4: Console Faders & DSP Quality -->
+      <section class="rack-card module-dsp">
+        <div class="card-rack-ears"></div>
         <div class="card-header">
           <div class="card-title">
-            <span class="accent-dot amber"></span> GAIN & TONE DYNAMICS
+            <span class="rack-indicator amber"></span> CONSOLE GAIN & DSP QUALITY
           </div>
           <div class="quality-toggle-group">
             <button class="quality-btn active" data-quality="1.0" id="btn-quality-full">A2 FULL (1.0)</button>
@@ -184,10 +282,20 @@
         <div class="card-body sliders-grid">
           <div class="slider-container">
             <div class="slider-header">
-              <span class="slider-name">INPUT LEVEL</span>
+              <span class="slider-name">PREAMP INPUT</span>
               <span class="slider-val" id="val-in-gain">0.0 dB</span>
             </div>
-            <input type="range" id="slider-in-gain" min="-24.0" max="24.0" step="0.5" value="0.0" class="pro-slider">
+            <div class="slider-track-wrap">
+              <div class="fader-scale">
+                <span>+12</span>
+                <span>+6</span>
+                <span>0</span>
+                <span>-6</span>
+                <span>-12</span>
+                <span>-24</span>
+              </div>
+              <input type="range" id="slider-in-gain" min="-24.0" max="24.0" step="0.5" value="0.0" class="pro-slider">
+            </div>
             <div class="slider-footer">
               <button class="btn-micro" onclick="setGain('in', 0.0)">0 dB</button>
               <button class="btn-micro" onclick="setGain('in', 3.0)">+3 dB</button>
@@ -200,7 +308,17 @@
               <span class="slider-name">MASTER OUTPUT</span>
               <span class="slider-val" id="val-out-gain">0.0 dB</span>
             </div>
-            <input type="range" id="slider-out-gain" min="-24.0" max="24.0" step="0.5" value="0.0" class="pro-slider">
+            <div class="slider-track-wrap">
+              <div class="fader-scale">
+                <span>+12</span>
+                <span>+6</span>
+                <span>0</span>
+                <span>-6</span>
+                <span>-12</span>
+                <span>-24</span>
+              </div>
+              <input type="range" id="slider-out-gain" min="-24.0" max="24.0" step="0.5" value="0.0" class="pro-slider">
+            </div>
             <div class="slider-footer">
               <button class="btn-micro" onclick="setGain('out', -6.0)">-6 dB</button>
               <button class="btn-micro" onclick="setGain('out', -3.0)">-3 dB</button>
@@ -211,25 +329,34 @@
       </section>
     </main>
 
-    <!-- Footer -->
-    <footer class="app-footer">
-      <span>JNAM Engine &bull; Zero-Latency PREEMPT_RT Audio Rig</span>
-      <span class="footer-dim" id="footer-hardware-info">Focusrite Scarlett Solo &bull; Allwinner H616 1.5GHz</span>
+    <!-- Rack Chassis Footer -->
+    <footer class="rack-footer">
+      <div class="footer-left">
+        <span class="footer-dot"></span>
+        <span>JNAM ENGINE &bull; PREEMPT_RT REAL-TIME AUDIO RIG</span>
+      </div>
+      <div class="footer-right" id="footer-hardware-info">
+        Focusrite Scarlett Solo &bull; Allwinner H616 1.5GHz
+      </div>
     </footer>
   </div>
 
-  <!-- Real-Time Chromatic Tuner Modal Overlay -->
+  <!-- Real-Time Chromatic Tuner Modal Overlay (FL / Hardware Strobe Style) -->
   <div class="tuner-overlay hidden" id="tuner-overlay">
     <div class="tuner-modal">
+      <div class="tuner-rack-ears"></div>
+
       <div class="tuner-header">
         <div class="tuner-title">
-          <span class="accent-dot emerald"></span> JNAM CHROMATIC TUNER
+          <span class="rack-indicator green"></span>
+          <span>JNAM DIGITAL CHROMATIC TUNER</span>
         </div>
-        <span class="badge bypassed">OUTPUT MUTED (SILENT)</span>
+        <span class="badge bypassed">MUTED FOR SILENT TUNING</span>
       </div>
 
-      <!-- Main Tuner Readout -->
+      <!-- Main Tuner Readout Screen -->
       <div class="tuner-display-box">
+        <div class="tuner-screen-reflection"></div>
         <div class="tuner-note-row">
           <span class="tuner-note-name" id="tuner-note">--</span>
           <span class="tuner-note-octave" id="tuner-octave"></span>
@@ -237,16 +364,29 @@
         <div class="tuner-freq-readout" id="tuner-freq">Pluck a string...</div>
       </div>
 
-      <!-- Pitch Deviation Cents Meter -->
+      <!-- Calibrated Cent Deviation Meter -->
       <div class="tuner-meter-container">
         <div class="tuner-scale-labels">
           <span>-50</span>
           <span>-25</span>
+          <span>-10</span>
           <span class="center-zero">0</span>
+          <span>+10</span>
           <span>+25</span>
           <span>+50</span>
         </div>
         <div class="tuner-meter-track">
+          <div class="tuner-ticks-layer">
+            <span style="left: 0%"></span>
+            <span style="left: 10%"></span>
+            <span style="left: 25%"></span>
+            <span style="left: 40%"></span>
+            <span style="left: 50%" class="center-tick"></span>
+            <span style="left: 60%"></span>
+            <span style="left: 75%"></span>
+            <span style="left: 90%"></span>
+            <span style="left: 100%"></span>
+          </div>
           <div class="tuner-center-target"></div>
           <div class="tuner-meter-needle" id="tuner-needle" style="left: 50%;"></div>
         </div>
@@ -260,7 +400,7 @@
 
       <!-- Exit Button -->
       <button class="btn-exit-tuner" id="btn-tuner-close">
-        EXIT TUNER & UNMUTE AUDIO
+        EXIT TUNER &bull; UNMUTE AUDIO
       </button>
     </div>
   </div>
