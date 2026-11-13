@@ -72,14 +72,14 @@ body.daw-workspace {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 16px 12px;
+  padding: 10px 14px;
   line-height: 1.4;
 }
 
-/* 19" Rack Chassis Container */
+/* 19" Studio Console Chassis Container (Widescreen Aware) */
 .rack-chassis {
   width: 100%;
-  max-width: 980px;
+  max-width: 1720px;
   background: var(--bg-rack-chassis);
   border: 1px solid var(--border-outer);
   border-top: 1px solid var(--border-chisel);
@@ -90,8 +90,8 @@ body.daw-workspace {
     0 0 0 1px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
+  gap: 10px;
+  padding: 12px;
 }
 
 /* ==============================================================================
@@ -468,12 +468,12 @@ body.daw-workspace {
 }
 
 /* ==============================================================================
-   MAIN RACK MODULES GRID
+   MAIN RACK MODULES GRID (WIDESCREEN 4-COL CONSOLE)
    ============================================================================== */
 .rack-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
 }
 
 .rack-card {
@@ -491,6 +491,10 @@ body.daw-workspace {
 }
 
 /* Module Accent Top Bar */
+.module-pedalboard { 
+  border-top: 2px solid #a855f7; 
+  grid-column: 1 / -1; 
+}
 .module-nam { border-top: 2px solid var(--fl-orange); }
 .module-cab { border-top: 2px solid var(--meter-green); }
 .module-hw  { border-top: 2px solid var(--meter-blue); }
@@ -831,13 +835,7 @@ body.daw-workspace {
 .pedalboard-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-}
-
-@media (max-width: 900px) {
-  .pedalboard-grid {
-    grid-template-columns: 1fr;
-  }
+  gap: 10px;
 }
 
 .stompbox-card {
@@ -845,13 +843,21 @@ body.daw-workspace {
   border: 1px solid #282f3d;
   border-top: 1px solid #3d465c;
   border-radius: var(--radius-control);
-  padding: 12px 14px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   position: relative;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 3px 6px rgba(0, 0, 0, 0.3);
   transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+@media (min-width: 1200px) {
+  .stomp-controls {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
 }
 
 .stompbox-card.active {
@@ -1461,8 +1467,33 @@ body.daw-workspace {
 }
 
 /* ==============================================================================
-   RESPONSIVE ERGONOMICS (DESKTOP, TABLET & MOBILE)
+   RESPONSIVE ERGONOMICS (WIDESCREEN, LAPTOP, TABLET & MOBILE)
    ============================================================================== */
+
+/* Medium Desktops & Standard Laptops (1024px to 1399px): 2x2 Grid for Core Units */
+@media (min-width: 961px) and (max-width: 1399px) {
+  .rack-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .module-pedalboard {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Tablet (769px to 960px): 2 Columns */
+@media (min-width: 769px) and (max-width: 960px) {
+  .rack-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .module-pedalboard {
+    grid-column: 1 / -1;
+  }
+  .pedalboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile & Small Screens (<= 768px): 1-Column Stack */
 @media (max-width: 768px) {
   body.daw-workspace {
     padding: 6px;
@@ -1474,6 +1505,9 @@ body.daw-workspace {
   }
   .rack-grid {
     grid-template-columns: 1fr;
+  }
+  .module-pedalboard {
+    grid-column: 1;
   }
   .pedalboard-grid {
     grid-template-columns: 1fr;

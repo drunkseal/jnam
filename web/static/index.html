@@ -187,77 +187,7 @@
     <!-- Main Rack Unit Grid -->
     <main class="rack-grid">
 
-      <!-- Module 1: Amp Model Unit -->
-      <section class="rack-card module-nam">
-        <div class="card-rack-ears"></div>
-        <div class="card-header">
-          <div class="card-title">
-            <span class="rack-indicator orange"></span> AMP MODEL LOADER
-          </div>
-          <span class="badge" id="model-badge">FULL RIG</span>
-        </div>
-        <div class="card-body">
-          <div class="rack-screen">
-            <div class="screen-header">ACTIVE NEURAL PROFILE</div>
-            <div class="current-name" id="display-model-name">Loading...</div>
-            <div class="current-meta" id="display-model-meta">Analyzing model weights...</div>
-          </div>
-          <div class="selector-group">
-            <label for="select-model" class="field-label">BROWSE MODEL ARCHIVE</label>
-            <div class="select-wrapper">
-              <select id="select-model" class="custom-select">
-                <option disabled selected>Loading models...</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Module 2: Cabinet IR & Bypass Unit -->
-      <section class="rack-card module-cab">
-        <div class="card-rack-ears"></div>
-        <div class="card-header">
-          <div class="card-title">
-            <span class="rack-indicator green"></span> CABINET CONVOLVER
-          </div>
-          <span class="badge" id="cab-badge">BYPASSED</span>
-        </div>
-        <div class="card-body">
-          <div class="field-label">CABINET IR OPERATING MODE</div>
-          <div class="cab-mode-selector">
-            <button class="mode-btn active" data-mode="auto" id="btn-cab-auto">
-              <span class="mode-led"></span>
-              <span class="mode-text">AUTO</span>
-              <span class="mode-hint">Detects Baked-in Cab</span>
-            </button>
-            <button class="mode-btn" data-mode="on" id="btn-cab-on">
-              <span class="mode-led"></span>
-              <span class="mode-text">ACTIVE</span>
-              <span class="mode-hint">Convolver ON</span>
-            </button>
-            <button class="mode-btn" data-mode="off" id="btn-cab-off">
-              <span class="mode-led"></span>
-              <span class="mode-text">BYPASS</span>
-              <span class="mode-hint">Direct Sound</span>
-            </button>
-          </div>
-
-          <div class="selector-group" id="ir-selector-group">
-            <label for="select-ir" class="field-label">IMPULSE RESPONSE (.WAV)</label>
-            <div class="select-wrapper">
-              <select id="select-ir" class="custom-select">
-                <option disabled selected>Loading IRs...</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="cab-info-banner" id="cab-info-banner">
-            Cabinet IR automatically bypassed because the loaded model already contains a physical cabinet and microphone capture.
-          </div>
-        </div>
-      </section>
-
-      <!-- Module: Virtual Pedalboard FX Chain -->
+      <!-- Module: Virtual Pedalboard FX Chain (Full Width Rack) -->
       <section class="rack-card module-pedalboard">
         <div class="card-rack-ears"></div>
         <div class="card-header">
@@ -381,7 +311,77 @@
         </div>
       </section>
 
-      <!-- Module 4: Audio Hardware & Routing Matrix -->
+      <!-- Module 1: Amp Model Unit -->
+      <section class="rack-card module-nam">
+        <div class="card-rack-ears"></div>
+        <div class="card-header">
+          <div class="card-title">
+            <span class="rack-indicator orange"></span> AMP MODEL LOADER
+          </div>
+          <span class="badge" id="model-badge">FULL RIG</span>
+        </div>
+        <div class="card-body">
+          <div class="rack-screen">
+            <div class="screen-header">ACTIVE NEURAL PROFILE</div>
+            <div class="current-name" id="display-model-name">Loading...</div>
+            <div class="current-meta" id="display-model-meta">Analyzing model weights...</div>
+          </div>
+          <div class="selector-group">
+            <label for="select-model" class="field-label">BROWSE MODEL ARCHIVE</label>
+            <div class="select-wrapper">
+              <select id="select-model" class="custom-select">
+                <option disabled selected>Loading models...</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 2: Cabinet IR & Bypass Unit -->
+      <section class="rack-card module-cab">
+        <div class="card-rack-ears"></div>
+        <div class="card-header">
+          <div class="card-title">
+            <span class="rack-indicator green"></span> CABINET CONVOLVER
+          </div>
+          <span class="badge" id="cab-badge">BYPASSED</span>
+        </div>
+        <div class="card-body">
+          <div class="field-label">CABINET IR OPERATING MODE</div>
+          <div class="cab-mode-selector">
+            <button class="mode-btn active" data-mode="auto" id="btn-cab-auto">
+              <span class="mode-led"></span>
+              <span class="mode-text">AUTO</span>
+              <span class="mode-hint">Detects Baked-in Cab</span>
+            </button>
+            <button class="mode-btn" data-mode="on" id="btn-cab-on">
+              <span class="mode-led"></span>
+              <span class="mode-text">ACTIVE</span>
+              <span class="mode-hint">Convolver ON</span>
+            </button>
+            <button class="mode-btn" data-mode="off" id="btn-cab-off">
+              <span class="mode-led"></span>
+              <span class="mode-text">BYPASS</span>
+              <span class="mode-hint">Direct Sound</span>
+            </button>
+          </div>
+
+          <div class="selector-group" id="ir-selector-group">
+            <label for="select-ir" class="field-label">IMPULSE RESPONSE (.WAV)</label>
+            <div class="select-wrapper">
+              <select id="select-ir" class="custom-select">
+                <option disabled selected>Loading IRs...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="cab-info-banner" id="cab-info-banner">
+            Cabinet IR automatically bypassed because the loaded model already contains a physical cabinet and microphone capture.
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 3: Audio Hardware & Routing Matrix -->
       <section class="rack-card module-hw">
         <div class="card-rack-ears"></div>
         <div class="card-header">
