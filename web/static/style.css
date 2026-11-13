@@ -940,10 +940,80 @@ body.daw-workspace {
   gap: 6px;
 }
 
+.pedalboard-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-add-pedal {
+  background: linear-gradient(180deg, #372e54 0%, #201a35 100%);
+  border: 1px solid #634399;
+  border-top: 1px solid #8e62d4;
+  color: #fff;
+  padding: 5px 12px;
+  border-radius: var(--radius-control);
+  font-size: 0.72rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-add-pedal:hover {
+  background: linear-gradient(180deg, #493b70 0%, #2a2245 100%);
+  border-color: #a855f7;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+}
+
+.btn-add-pedal:active {
+  transform: translateY(1px);
+}
+
 .pedalboard-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  min-height: 120px;
+}
+
+.pedalboard-empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 36px 20px;
+  background: #11141b;
+  border: 2px dashed #2b3345;
+  border-radius: var(--radius-control);
+  text-align: center;
+}
+
+.pedalboard-empty-icon {
+  color: #64748b;
+}
+
+.pedalboard-empty-title {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #cbd5e1;
+  letter-spacing: 1px;
+}
+
+.pedalboard-empty-sub {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  max-width: 440px;
+  line-height: 1.5;
 }
 
 .stompbox-card {
@@ -951,13 +1021,77 @@ body.daw-workspace {
   border: 1px solid #282f3d;
   border-top: 1px solid #3d465c;
   border-radius: var(--radius-control);
-  padding: 10px 12px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   position: relative;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 3px 6px rgba(0, 0, 0, 0.3);
   transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.stompbox-card.active {
+  border-color: #4a5a78;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.05);
+}
+
+.stomp-header-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pedal-pos-pill {
+  font-family: var(--font-mono);
+  font-size: 0.60rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid #3b4252;
+  background: #151821;
+  color: #94a3b8;
+  cursor: pointer;
+  letter-spacing: 0.8px;
+  transition: all 0.15s ease;
+}
+
+.pedal-pos-pill.pre {
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.pedal-pos-pill.post {
+  border-color: rgba(0, 229, 255, 0.4);
+  color: #00e5ff;
+  background: rgba(0, 229, 255, 0.08);
+}
+
+.btn-pedal-nav, .btn-pedal-del {
+  background: #1a1e27;
+  border: 1px solid #2d3545;
+  color: #94a3b8;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.65rem;
+  transition: all 0.12s ease;
+}
+
+.btn-pedal-nav:hover {
+  background: #252c3a;
+  color: #fff;
+  border-color: #475569;
+}
+
+.btn-pedal-del:hover {
+  background: #3f1d24;
+  color: #f87171;
+  border-color: #ef4444;
 }
 
 @media (min-width: 1200px) {
@@ -2462,6 +2596,284 @@ body.daw-workspace {
   background: #171c26;
   border-color: #4e5b77;
   color: #fff;
+}
+
+/* ==============================================================================
+   MODULAR LV2 PEDALBOARD LIBRARY MODAL
+   ============================================================================== */
+.pedal-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(8, 10, 14, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.pedal-modal-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.pedal-modal {
+  background: #171a22;
+  border: 1px solid #2e3545;
+  border-top: 1px solid #4a5570;
+  border-radius: var(--radius-chassis);
+  width: 100%;
+  max-width: 860px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 
+    0 25px 70px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(0, 0, 0, 0.6);
+  position: relative;
+  overflow: hidden;
+}
+
+.pedal-modal-ears {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.pedal-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #222633;
+  padding: 14px 20px;
+  background: #141720;
+}
+
+.pedal-modal-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pedal-modal-count {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.pedal-modal-close {
+  background: #1f2430;
+  border: 1px solid #333c50;
+  color: #94a3b8;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pedal-modal-close:hover {
+  background: #283040;
+  color: #fff;
+  border-color: #4a5570;
+}
+
+.pedal-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 20px;
+  background: #11141b;
+  border-bottom: 1px solid #222735;
+}
+
+.pedal-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #161922;
+  border: 1px solid #2d3546;
+  border-radius: 4px;
+  padding: 6px 12px;
+  color: #94a3b8;
+}
+
+.pedal-search-box input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  width: 100%;
+}
+
+.pedal-category-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pedal-cat-pill {
+  background: #181c26;
+  border: 1px solid #282f3f;
+  border-radius: 4px;
+  color: #94a3b8;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  cursor: pointer;
+  letter-spacing: 0.6px;
+  transition: all 0.12s ease;
+}
+
+.pedal-cat-pill:hover {
+  background: #202634;
+  color: #fff;
+  border-color: #3b465e;
+}
+
+.pedal-cat-pill.active {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: #a855f7;
+  color: #c084fc;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.3);
+}
+
+.pedal-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  max-height: calc(92vh - 170px);
+}
+
+.plugin-card {
+  background: #141720;
+  border: 1px solid #252b3a;
+  border-radius: var(--radius-control);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.plugin-card:hover {
+  background: #181d28;
+  border-color: #3f4a62;
+  transform: translateY(-1px);
+}
+
+.plugin-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.plugin-cat-badge {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.plugin-io-badge {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #0f1218;
+  padding: 2px 5px;
+  border-radius: 3px;
+  border: 1px solid #1e2430;
+}
+
+.plugin-card-name {
+  font-family: var(--font-display);
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+.plugin-card-desc {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.plugin-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.btn-add-to-chain {
+  flex: 1;
+  background: linear-gradient(180deg, #252b38 0%, #171b24 100%);
+  border: 1px solid #374154;
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 800;
+  padding: 6px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.6px;
+  text-align: center;
+  transition: all 0.12s ease;
+}
+
+.btn-add-to-chain:hover {
+  background: #333c4e;
+  border-color: #60a5fa;
+  color: #fff;
+}
+
+.btn-add-to-chain.pre:hover {
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.btn-add-to-chain.post:hover {
+  border-color: #00e5ff;
+  color: #00e5ff;
 }
 
 /* ==============================================================================

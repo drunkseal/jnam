@@ -121,27 +121,27 @@ fi )
 </aj-snapshot>
 XML
 
-# Prepare FIFOs for live parameter control (NAM + Pedalboard FX)
+# Prepare FIFO for NAM live parameter control
 NAM_FIFO="/tmp/nam_control.fifo"
-DRIVE_FIFO="/tmp/nam_drive.fifo"
-DELAY_FIFO="/tmp/nam_delay.fifo"
-REVERB_FIFO="/tmp/nam_reverb.fifo"
 
-rm -f "$NAM_FIFO" "$DRIVE_FIFO" "$DELAY_FIFO" "$REVERB_FIFO"
-mkfifo "$NAM_FIFO" "$DRIVE_FIFO" "$DELAY_FIFO" "$REVERB_FIFO"
+rm -f "$NAM_FIFO"
+mkfifo "$NAM_FIFO"
 sleep infinity > "$NAM_FIFO" &
 NAM_FKEEP=$!
-sleep infinity > "$DRIVE_FIFO" &
-DRIVE_FKEEP=$!
-sleep infinity > "$DELAY_FIFO" &
-DELAY_FKEEP=$!
-sleep infinity > "$REVERB_FIFO" &
-REVERB_FKEEP=$!
 
 cleanup() {
     echo "[jnam] Stopping rig and pedalboard components..."
-    kill $JALV_PID $CAB_PID $DRIVE_PID $DELAY_PID $REVERB_PID $SNAP_PID $NAM_FKEEP $DRIVE_FKEEP $DELAY_FKEEP $REVERB_FKEEP 2>/dev/null || true
-    rm -f "$NAM_FIFO" "$DRIVE_FIFO" "$DELAY_FIFO" "$REVERB_FIFO"
+    kill $JALV_PID $CAB_PID $SNAP_PID $NAM_FKEEP 2>/dev/null || true
+    rm -f "$NAM_FIFO"
+    python3 -c "
+import sys, os
+sys.path.insert(0, '$NAM_DIR/web')
+try:
+    import pedalboard
+    pedalboard.stop_all_pedals()
+except Exception:
+    pass
+" 2>/dev/null || true
 }
 
 TERMINATED=0
@@ -178,27 +178,14 @@ if [ "$CAB_ENABLED" -eq 1 ]; then
     PIDS_TO_WATCH+=($CAB_PID)
 fi
 
-# 8. Start Pedalboard FX on Core 2
-echo "[jnam] Starting Pedalboard FX (Drive, Delay, Reverb)..."
-$CAB_AFFINITY jalv -n drive http://guitarix.sourceforge.net/plugins/gxts9#ts9sim < "$DRIVE_FIFO" &
-DRIVE_PID=$!
-PIDS_TO_WATCH+=($DRIVE_PID)
+# 8. Start Modular Pedalboard Engine on Core 2
+echo "[jnam] Initializing Modular Pedalboard FX..."
+curl -s -m 2 http://127.0.0.1:8080/api/pedalboard >/dev/null 2>&1 || true
 
-$CAB_AFFINITY jalv -n delay http://guitarix.sourceforge.net/plugins/gx_delay_stereo#_delay_stereo < "$DELAY_FIFO" &
-DELAY_PID=$!
-PIDS_TO_WATCH+=($DELAY_PID)
-
-$CAB_AFFINITY jalv -n reverb http://guitarix.sourceforge.net/plugins/gx_reverb_stereo#_reverb_stereo < "$REVERB_FIFO" &
-REVERB_PID=$!
-PIDS_TO_WATCH+=($REVERB_PID)
-
-# Wait up to 5 seconds for all plugin ports to register in JACK
+# Wait up to 5 seconds for NAM (and Cab if enabled) ports to register in JACK
 for i in $(seq 1 50); do
     PORTS=$(jack_lsp 2>/dev/null || true)
-    if echo "$PORTS" | grep -q "nam:input" && \
-       echo "$PORTS" | grep -q "drive:in" && \
-       echo "$PORTS" | grep -q "delay:in" && \
-       echo "$PORTS" | grep -q "reverb:in"; then
+    if echo "$PORTS" | grep -q "nam:input"; then
         if [ "$CAB_ENABLED" -eq 0 ] || echo "$PORTS" | grep -q "cab:in"; then
             break
         fi

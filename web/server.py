@@ -10,6 +10,8 @@ import glob
 import json
 import time
 import subprocess
+import pedalboard
+import plugins
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.parse
 
@@ -431,11 +433,18 @@ def generate_connections_xml(in_chan=None, out_chan=None, cab_enabled=None, fx_s
     return content
 
 def apply_jack_routing_live():
-    generate_connections_xml()
+    in_chan = get_input_channel()
+    out_chan = get_output_channel()
+    cab_enabled = is_cab_effective_enabled()
     try:
-        subprocess.call(["aj-snapshot", "-r", "-j", "-x", CONNECTIONS_XML], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception:
-        pass
+        pedalboard.apply_jack_routing_live(in_chan, out_chan, cab_enabled)
+    except Exception as e:
+        print(f"[routing] Error applying modular pedalboard routing: {e}")
+        generate_connections_xml()
+        try:
+            subprocess.call(["aj-snapshot", "-r", "-j", "-x", CONNECTIONS_XML], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
 
 def send_fifo(cmd):
     if os.path.exists(FIFO_PATH):
@@ -702,6 +711,7 @@ def get_full_status():
         },
         "dsp": state_cache,
         "fx": get_fx_state(),
+        "pedalboard": pedalboard.get_pedalboard(),
         "tuner": {
             "active": state_cache["tuner_active"]
         },
@@ -787,6 +797,14 @@ class JNAMHandler(BaseHTTPRequestHandler):
             return
         elif path == "/api/metronome":
             self.send_json(state_cache.setdefault("metronome", DEFAULT_METRONOME.copy()))
+            return
+        elif path == "/api/plugins":
+            cache_file = os.path.join(NAM_DIR, "plugins_cache.json")
+            self.send_json(plugins.get_plugins_catalog(cache_file))
+            return
+        elif path == "/api/pedalboard":
+            pedalboard.ensure_all_pedals_running()
+            self.send_json(pedalboard.get_pedalboard())
             return
         elif path == "/api/tuner/stream":
             # Server-Sent Events (SSE) Real-Time Pitch Data Stream
@@ -1010,6 +1028,44 @@ class JNAMHandler(BaseHTTPRequestHandler):
             self.send_json({"success": True, "metronome": new_metro})
             return
 
+        elif path == "/api/pedalboard/add":
+            uri = req_data.get("uri")
+            pos = req_data.get("position", "post")
+            new_slot = pedalboard.add_pedal(uri, pos)
+            apply_jack_routing_live()
+            self.send_json({"success": True, "slot": new_slot, "pedalboard": pedalboard.get_pedalboard()})
+            return
+
+        elif path == "/api/pedalboard/remove":
+            slot_id = req_data.get("id")
+            ok = pedalboard.remove_pedal(slot_id)
+            apply_jack_routing_live()
+            self.send_json({"success": ok, "pedalboard": pedalboard.get_pedalboard()})
+            return
+
+        elif path == "/api/pedalboard/reorder":
+            slot_ids = req_data.get("ids", [])
+            new_pb = pedalboard.reorder_pedals(slot_ids)
+            apply_jack_routing_live()
+            self.send_json({"success": True, "pedalboard": new_pb})
+            return
+
+        elif path == "/api/pedalboard/slot":
+            slot_id = req_data.get("id")
+            target = pedalboard.update_pedal_slot(slot_id, req_data)
+            if "enabled" in req_data or "position" in req_data:
+                apply_jack_routing_live()
+            self.send_json({"success": target is not None, "slot": target, "pedalboard": pedalboard.get_pedalboard()})
+            return
+
+        elif path == "/api/pedalboard/clear":
+            pedalboard.stop_all_pedals()
+            pb = {"slots": []}
+            pedalboard.save_pedalboard(pb)
+            apply_jack_routing_live()
+            self.send_json({"success": True, "pedalboard": pb})
+            return
+
         elif path == "/api/service":
             action = req_data.get("action", "restart").lower()
             if action == "restart":
@@ -1026,11 +1082,18 @@ def run_server(host="0.0.0.0", port=8080):
     server = HTTPServer((host, port), JNAMHandler)
     print(f"JNAM Web Controller running at http://{host}:{port}/")
     try:
+        pedalboard.ensure_all_pedals_running()
+        apply_jack_routing_live()
+    except Exception as e:
+        print(f"[pedalboard] Init error: {e}")
+
+    try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nStopping JNAM Web Controller...")
         stop_tuner()
         stop_metronome()
+        pedalboard.stop_all_pedals()
         server.server_close()
 
 if __name__ == "__main__":

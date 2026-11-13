@@ -15,6 +15,13 @@ const API = {
   tunerStream: '/api/tuner/stream',
   tunerStop: '/api/tuner/stop',
   metronome: '/api/metronome',
+  plugins: '/api/plugins',
+  pedalboard: '/api/pedalboard',
+  pedalboardAdd: '/api/pedalboard/add',
+  pedalboardRemove: '/api/pedalboard/remove',
+  pedalboardReorder: '/api/pedalboard/reorder',
+  pedalboardSlot: '/api/pedalboard/slot',
+  pedalboardClear: '/api/pedalboard/clear',
   service: '/api/service'
 };
 
@@ -61,6 +68,25 @@ const chainOutLabel = document.getElementById('chain-out-label');
 const badgeFxDrive = document.getElementById('badge-fx-drive');
 const badgeFxDelay = document.getElementById('badge-fx-delay');
 const badgeFxReverb = document.getElementById('badge-fx-reverb');
+
+// Modular Pedalboard Elements
+const pedalboardSlotsContainer = document.getElementById('pedalboard-slots-container');
+const badgePedalCount = document.getElementById('badge-pedal-count');
+const btnAddPedalOpen = document.getElementById('btn-add-pedal-open');
+const pedalModalOverlay = document.getElementById('pedal-modal-overlay');
+const btnPedalModalClose = document.getElementById('btn-pedal-modal-close');
+const inputPedalSearch = document.getElementById('input-pedal-search');
+const pedalCatPills = document.querySelectorAll('.pedal-cat-pill');
+const pedalCatalogGrid = document.getElementById('pedal-catalog-grid');
+const txtPluginCount = document.getElementById('txt-plugin-count');
+
+let pluginCatalog = [];
+let featuredPlugins = [];
+let pedalboardState = { slots: [] };
+let isUserDraggingPedalKnob = false;
+let activePedalCategoryFilter = 'all';
+let pedalSearchQuery = '';
+let pedalDebounceTimers = {};
 
 const stompDriveCard = document.getElementById('stomp-drive-card');
 const ledFxDrive = document.getElementById('led-fx-drive');
@@ -1667,6 +1693,536 @@ if (metroCheckWeb) {
   });
 }
 
+/* ==============================================================================
+   MODULAR PEDALBOARD FX ENGINE (DYNAMIC LV2 HOSTING & ROUTING)
+   ============================================================================== */
+
+async function loadPluginCatalog() {
+  try {
+    const res = await fetch(API.plugins);
+    if (!res.ok) return;
+    const data = await res.json();
+    pluginCatalog = data.plugins || [];
+    featuredPlugins = data.featured || [];
+    if (txtPluginCount) {
+      txtPluginCount.textContent = `(${pluginCatalog.length} Plugins Available)`;
+    }
+    renderPluginCatalog();
+  } catch (err) {
+    console.error('Failed to load plugin catalog:', err);
+  }
+}
+
+function renderPluginCatalog() {
+  if (!pedalCatalogGrid) return;
+  pedalCatalogGrid.innerHTML = '';
+
+  const q = pedalSearchQuery.trim().toLowerCase();
+  const cat = activePedalCategoryFilter;
+
+  const filtered = pluginCatalog.filter(p => {
+    const isFeatured = featuredPlugins.some(f => f.uri === p.uri);
+    if (cat === 'featured' && !isFeatured) return false;
+    if (cat !== 'all' && cat !== 'featured' && p.category !== cat) return false;
+
+    if (q) {
+      const matchName = (p.name || '').toLowerCase().includes(q);
+      const matchClass = (p.class || '').toLowerCase().includes(q);
+      const matchUri = (p.uri || '').toLowerCase().includes(q);
+      const featured = featuredPlugins.find(f => f.uri === p.uri);
+      const matchTag = featured && (featured.tagline || '').toLowerCase().includes(q);
+      if (!matchName && !matchClass && !matchUri && !matchTag) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    pedalCatalogGrid.innerHTML = `
+      <div style="grid-column: 1 / -1; padding: 40px 20px; text-align: center; color: var(--text-muted); font-family: var(--font-mono); font-size: 0.8rem;">
+        No plugins found matching "${escapeHtml(q)}". Try searching for TS9, Delay, Reverb, Chorus, or Flanger.
+      </div>
+    `;
+    return;
+  }
+
+  filtered.forEach(plugin => {
+    const featured = featuredPlugins.find(f => f.uri === plugin.uri);
+    const card = document.createElement('div');
+    card.className = 'plugin-card';
+
+    const catColors = {
+      distortion: '#10b981',
+      modulation: '#3b82f6',
+      delay: '#00e5ff',
+      reverb: '#a855f7',
+      dynamics: '#ef4444',
+      filter: '#f97316',
+      pitch: '#8b5cf6',
+      utility: '#64748b'
+    };
+    const color = (featured && featured.color) || catColors[plugin.category] || '#64748b';
+
+    const tagline = (featured && featured.tagline) || plugin.class || plugin.author || 'LV2 Audio DSP Effect';
+
+    card.innerHTML = `
+      <div>
+        <div class="plugin-card-top">
+          <span class="plugin-cat-badge" style="background: ${color}20; color: ${color}; border: 1px solid ${color}40;">
+            ${escapeHtml(plugin.category)}
+          </span>
+          <span class="plugin-io-badge">${plugin.is_stereo ? 'Stereo' : 'Mono'}</span>
+        </div>
+        <div class="plugin-card-name">${escapeHtml(plugin.name)}</div>
+        <div class="plugin-card-desc">${escapeHtml(tagline)}</div>
+      </div>
+      <div class="plugin-card-actions">
+        <button type="button" class="btn-add-to-chain pre" data-uri="${plugin.uri}" data-pos="pre" title="Add to Pre-Amp chain (before amplifier)">+ PRE-AMP</button>
+        <button type="button" class="btn-add-to-chain post" data-uri="${plugin.uri}" data-pos="post" title="Add to Post-Amp FX loop (after amplifier & cab)">+ POST-AMP</button>
+      </div>
+    `;
+
+    const btnPre = card.querySelector('.btn-add-to-chain.pre');
+    const btnPost = card.querySelector('.btn-add-to-chain.post');
+
+    btnPre.addEventListener('click', () => addPedalToBoard(plugin.uri, 'pre'));
+    btnPost.addEventListener('click', () => addPedalToBoard(plugin.uri, 'post'));
+
+    pedalCatalogGrid.appendChild(card);
+  });
+}
+
+async function loadPedalboard() {
+  try {
+    const res = await fetch(API.pedalboard);
+    if (!res.ok) return;
+    const data = await res.json();
+    renderPedalboard(data);
+  } catch (err) {
+    console.error('Failed to load pedalboard:', err);
+  }
+}
+
+function formatParamValue(val, symbol = '') {
+  const sym = symbol.toLowerCase();
+  const v = parseFloat(val);
+  if (isNaN(v)) return String(val);
+
+  if (sym.includes('time') || sym.includes('delay')) {
+    if (v < 1.0) return `${Math.round(v * 1000)} ms`;
+    return `${Math.round(v)} ms`;
+  }
+  if (sym.includes('gain') || sym.includes('level') || sym.includes('db')) {
+    const sign = v > 0 ? '+' : '';
+    return `${sign}${v.toFixed(1)} dB`;
+  }
+  if (sym.includes('freq') || sym.includes('tone')) {
+    if (v >= 1000) return `${(v / 1000).toFixed(1)} kHz`;
+    return `${Math.round(v)} Hz`;
+  }
+  if (sym.includes('pct') || sym.includes('mix') || sym.includes('wet') || sym.includes('room') || sym.includes('damp')) {
+    return `${Math.round(v <= 1.0 && v >= 0 ? v * 100 : v)}%`;
+  }
+  if (sym.includes('drive') || sym.includes('depth') || sym.includes('feedback')) {
+    return v <= 1.0 && v >= 0 ? `${Math.round(v * 100)}%` : `${v.toFixed(2)}`;
+  }
+  return v % 1 === 0 ? String(v) : v.toFixed(2);
+}
+
+function bindPedalKnobUnit(unit, onParamChange) {
+  const input = unit.querySelector('input[type="range"]');
+  const knob = unit.querySelector('.knob-wrapper');
+  const readout = unit.querySelector('.knob-readout');
+  if (!input || !knob) return;
+
+  updateKnobVisual(input);
+
+  const min = parseFloat(input.min);
+  const max = parseFloat(input.max);
+  const isInteger = input.dataset.integer === 'true';
+
+  let isDragging = false;
+  let startY = 0;
+  let startVal = 0;
+
+  knob.addEventListener('pointerdown', (e) => {
+    isDragging = true;
+    isUserDraggingPedalKnob = true;
+    startY = e.clientY;
+    startVal = parseFloat(input.value);
+    knob.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  knob.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    const dy = startY - e.clientY;
+    const delta = (dy / 140) * (max - min);
+    let newVal = Math.max(min, Math.min(max, startVal + delta));
+    if (isInteger) newVal = Math.round(newVal);
+    input.value = newVal;
+    updateKnobVisual(input);
+    if (readout) readout.textContent = formatParamValue(newVal, input.dataset.symbol);
+    if (onParamChange) onParamChange(newVal);
+  });
+
+  const stopDrag = () => {
+    if (isDragging) {
+      isDragging = false;
+      setTimeout(() => { isUserDraggingPedalKnob = false; }, 100);
+      updateKnobVisual(input);
+    }
+  };
+
+  knob.addEventListener('pointerup', stopDrag);
+  knob.addEventListener('pointercancel', stopDrag);
+
+  knob.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const range = max - min;
+    const delta = (e.deltaY < 0 ? 1 : -1) * (range / 50);
+    let newVal = Math.max(min, Math.min(max, parseFloat(input.value) + delta));
+    if (isInteger) newVal = Math.round(newVal);
+    input.value = newVal;
+    updateKnobVisual(input);
+    if (readout) readout.textContent = formatParamValue(newVal, input.dataset.symbol);
+    if (onParamChange) onParamChange(newVal);
+  }, { passive: false });
+}
+
+function renderPedalboard(pb) {
+  if (!pb || !pb.slots) return;
+  if (isUserDraggingPedalKnob) return;
+
+  pedalboardState = pb;
+
+  const activeCount = pb.slots.filter(s => s.enabled).length;
+  const preCount = pb.slots.filter(s => s.enabled && s.position === 'pre').length;
+  const postCount = pb.slots.filter(s => s.enabled && s.position === 'post').length;
+
+  if (badgePedalCount) {
+    badgePedalCount.textContent = `${activeCount} ACTIVE (${preCount} Pre / ${postCount} Post)`;
+    badgePedalCount.className = activeCount > 0 ? 'badge active' : 'badge';
+  }
+
+  if (!pedalboardSlotsContainer) return;
+  pedalboardSlotsContainer.innerHTML = '';
+
+  if (pb.slots.length === 0) {
+    pedalboardSlotsContainer.innerHTML = `
+      <div class="pedalboard-empty-state">
+        <svg class="pedalboard-empty-icon" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="4" y="2" width="16" height="20" rx="3"/>
+          <circle cx="12" cy="7" r="2.5"/>
+          <circle cx="8" cy="14" r="1.5"/>
+          <circle cx="16" cy="14" r="1.5"/>
+          <rect x="9" y="17" width="6" height="3" rx="1"/>
+        </svg>
+        <div class="pedalboard-empty-title">MODULAR PEDALBOARD IS EMPTY</div>
+        <div class="pedalboard-empty-sub">
+          Load any installed LV2 effect pedal (Overdrive, Distortion, Fuzz, Chorus, Delay, Reverb, Noise Gate) into your Pre-Amp or Post-Amp FX loop!
+        </div>
+        <button type="button" class="btn-add-pedal" onclick="openPedalModal()" style="padding: 8px 16px; font-size: 0.8rem;">
+          + ADD YOUR FIRST PEDAL
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  pb.slots.forEach(slot => {
+    const card = document.createElement('div');
+    card.className = `stompbox-card ${slot.enabled ? 'active' : ''}`;
+    card.id = `stomp-${slot.id}`;
+
+    const color = slot.color || '#3b82f6';
+    card.style.borderTopColor = color;
+    if (slot.enabled) {
+      card.style.boxShadow = `0 0 16px ${color}25`;
+    }
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'stomp-header';
+    header.innerHTML = `
+      <div class="stomp-title">
+        <span class="stomp-led ${slot.enabled ? 'active' : ''}" style="${slot.enabled ? `background: ${color}; box-shadow: 0 0 10px ${color}` : ''}"></span>
+        <span class="stomp-name">${escapeHtml(slot.name)}</span>
+      </div>
+      <div class="stomp-header-right">
+        <button type="button" class="pedal-pos-pill ${slot.position}" title="Click to toggle between Pre-Amp and Post-Amp FX loop">
+          ${slot.position === 'pre' ? 'PRE-AMP' : 'POST-AMP'}
+        </button>
+        <button type="button" class="btn-pedal-nav btn-prev" title="Move earlier in chain">◄</button>
+        <button type="button" class="btn-pedal-nav btn-next" title="Move later in chain">►</button>
+        <button type="button" class="btn-pedal-del" title="Remove pedal">✕</button>
+      </div>
+    `;
+
+    // Position toggle
+    header.querySelector('.pedal-pos-pill').addEventListener('click', () => {
+      togglePedalPosition(slot.id);
+    });
+
+    // Reorder buttons
+    header.querySelector('.btn-prev').addEventListener('click', () => {
+      shiftPedalOrder(slot.id, -1);
+    });
+    header.querySelector('.btn-next').addEventListener('click', () => {
+      shiftPedalOrder(slot.id, 1);
+    });
+
+    // Delete button
+    header.querySelector('.btn-pedal-del').addEventListener('click', () => {
+      removePedalFromBoard(slot.id);
+    });
+
+    card.appendChild(header);
+
+    // Controls Area (Knobs)
+    const controlsWrap = document.createElement('div');
+    controlsWrap.className = 'stomp-controls';
+
+    // Look up control metadata
+    let pluginMeta = pluginCatalog.find(p => p.uri === slot.uri);
+    let controlsList = (pluginMeta && pluginMeta.controls) || [];
+
+    // If controls metadata not yet loaded from catalog, synthesize from saved params
+    if (controlsList.length === 0 && slot.params) {
+      controlsList = Object.keys(slot.params).map(sym => ({
+        symbol: sym,
+        name: sym.replace(/_/g, '').toUpperCase(),
+        min: 0.0,
+        max: 1.0,
+        default: slot.params[sym]
+      }));
+    }
+
+    controlsList.forEach(ctrl => {
+      const sym = ctrl.symbol;
+      const curVal = (slot.params && slot.params[sym] !== undefined) ? slot.params[sym] : ctrl.default;
+      const min = ctrl.min !== undefined ? ctrl.min : 0.0;
+      const max = ctrl.max !== undefined ? ctrl.max : 1.0;
+      const step = ctrl.is_integer ? 1 : ((max - min) / 100);
+
+      const knobUnit = document.createElement('div');
+      knobUnit.className = 'pedal-knob-unit';
+      knobUnit.innerHTML = `
+        <span class="knob-label">${escapeHtml(ctrl.name || sym)}</span>
+        <div class="knob-wrapper" title="${escapeHtml(ctrl.name || sym)} (Drag or Scroll)">
+          <svg class="knob-svg" viewBox="0 0 60 60">
+            <circle class="knob-track-bg" cx="30" cy="30" r="23" />
+            <circle class="knob-track-val" cx="30" cy="30" r="23" style="stroke: ${color};" />
+          </svg>
+          <div class="knob-cap">
+            <div class="knob-indicator"></div>
+          </div>
+        </div>
+        <span class="knob-readout">${formatParamValue(curVal, sym)}</span>
+        <input type="range" class="knob-hidden-input" min="${min}" max="${max}" step="${step}" value="${curVal}" data-symbol="${sym}" data-integer="${ctrl.is_integer ? 'true' : 'false'}" autocomplete="off">
+      `;
+
+      bindPedalKnobUnit(knobUnit, (newVal) => {
+        updatePedalParam(slot.id, sym, newVal);
+      });
+
+      controlsWrap.appendChild(knobUnit);
+    });
+
+    card.appendChild(controlsWrap);
+
+    // Stomp Footswitch Row
+    const footRow = document.createElement('div');
+    footRow.className = 'stomp-footswitch-row';
+    const btnStomp = document.createElement('button');
+    btnStomp.type = 'button';
+    btnStomp.className = `btn-stomp ${slot.enabled ? 'active' : ''}`;
+    btnStomp.innerHTML = `<span>${slot.enabled ? 'ENGAGED' : 'BYPASS'}</span>`;
+    btnStomp.addEventListener('click', () => {
+      togglePedalStomp(slot.id);
+    });
+
+    footRow.appendChild(btnStomp);
+    card.appendChild(footRow);
+
+    pedalboardSlotsContainer.appendChild(card);
+  });
+
+  syncAllKnobsVisuals();
+}
+
+async function addPedalToBoard(uri, position = 'post') {
+  closePedalModal();
+  try {
+    const res = await fetch(API.pedalboardAdd, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uri, position })
+    });
+    const data = await res.json();
+    if (data.pedalboard) {
+      renderPedalboard(data.pedalboard);
+    }
+    setTimeout(updateStatus, 300);
+  } catch (err) {
+    console.error('Failed to add pedal:', err);
+  }
+}
+
+async function removePedalFromBoard(slotId) {
+  try {
+    const res = await fetch(API.pedalboardRemove, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: slotId })
+    });
+    const data = await res.json();
+    if (data.pedalboard) {
+      renderPedalboard(data.pedalboard);
+    }
+    setTimeout(updateStatus, 300);
+  } catch (err) {
+    console.error('Failed to remove pedal:', err);
+  }
+}
+
+async function togglePedalPosition(slotId) {
+  const slot = pedalboardState.slots.find(s => s.id === slotId);
+  if (!slot) return;
+  const newPos = slot.position === 'pre' ? 'post' : 'pre';
+  try {
+    const res = await fetch(API.pedalboardSlot, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: slotId, position: newPos })
+    });
+    const data = await res.json();
+    if (data.pedalboard) {
+      renderPedalboard(data.pedalboard);
+    }
+    setTimeout(updateStatus, 300);
+  } catch (err) {
+    console.error('Failed to toggle pedal position:', err);
+  }
+}
+
+async function shiftPedalOrder(slotId, direction) {
+  const idx = pedalboardState.slots.findIndex(s => s.id === slotId);
+  if (idx < 0) return;
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= pedalboardState.slots.length) return;
+
+  const newSlots = [...pedalboardState.slots];
+  const [moved] = newSlots.splice(idx, 1);
+  newSlots.splice(targetIdx, 0, moved);
+
+  const ids = newSlots.map(s => s.id);
+  try {
+    const res = await fetch(API.pedalboardReorder, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    const data = await res.json();
+    if (data.pedalboard) {
+      renderPedalboard(data.pedalboard);
+    }
+    setTimeout(updateStatus, 300);
+  } catch (err) {
+    console.error('Failed to reorder pedals:', err);
+  }
+}
+
+async function togglePedalStomp(slotId) {
+  const slot = pedalboardState.slots.find(s => s.id === slotId);
+  if (!slot) return;
+  const newEnabled = !slot.enabled;
+  slot.enabled = newEnabled; // optimistic update
+  renderPedalboard(pedalboardState);
+
+  try {
+    const res = await fetch(API.pedalboardSlot, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: slotId, enabled: newEnabled })
+    });
+    const data = await res.json();
+    if (data.pedalboard) {
+      renderPedalboard(data.pedalboard);
+    }
+    setTimeout(updateStatus, 300);
+  } catch (err) {
+    console.error('Failed to toggle stomp:', err);
+  }
+}
+
+function updatePedalParam(slotId, symbol, value) {
+  const slot = pedalboardState.slots.find(s => s.id === slotId);
+  if (slot) {
+    slot.params = slot.params || {};
+    slot.params[symbol] = value;
+  }
+
+  clearTimeout(pedalDebounceTimers[slotId]);
+  pedalDebounceTimers[slotId] = setTimeout(() => {
+    fetch(API.pedalboardSlot, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: slotId, params: { [symbol]: value } })
+    }).catch(err => console.error(err));
+  }, 40);
+}
+
+function openPedalModal() {
+  if (pedalModalOverlay) {
+    pedalModalOverlay.classList.remove('hidden');
+    renderPluginCatalog();
+    if (inputPedalSearch) inputPedalSearch.focus();
+  }
+}
+
+function closePedalModal() {
+  if (pedalModalOverlay) {
+    pedalModalOverlay.classList.add('hidden');
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Modal Event Listeners
+if (btnAddPedalOpen) btnAddPedalOpen.addEventListener('click', openPedalModal);
+if (btnPedalModalClose) btnPedalModalClose.addEventListener('click', closePedalModal);
+
+if (pedalModalOverlay) {
+  pedalModalOverlay.addEventListener('click', (e) => {
+    if (e.target === pedalModalOverlay) closePedalModal();
+  });
+}
+
+if (inputPedalSearch) {
+  inputPedalSearch.addEventListener('input', (e) => {
+    pedalSearchQuery = e.target.value.toLowerCase();
+    renderPluginCatalog();
+  });
+}
+
+if (pedalCatPills) {
+  pedalCatPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      pedalCatPills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      activePedalCategoryFilter = pill.dataset.cat || 'all';
+      renderPluginCatalog();
+    });
+  });
+}
+
 selectModel.addEventListener('change', async (e) => {
   displayModelName.textContent = 'Switching model...';
   try {
@@ -2081,6 +2637,8 @@ initRotaryKnobs();
 setTuning(currentTuningKey);
 renderMetroDots();
 updateMetroUI();
+loadPluginCatalog();
+loadPedalboard();
 updateStatus();
 setInterval(updateStatus, 4000);
 

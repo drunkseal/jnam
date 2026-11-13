@@ -199,196 +199,30 @@
     <!-- Main Rack Unit Grid -->
     <main class="rack-grid">
 
-      <!-- Module: Virtual Pedalboard FX Chain (Full Width Rack) -->
+      <!-- Module: Modular Virtual Pedalboard FX Chain (Full Width Rack) -->
       <section class="rack-card module-pedalboard">
         <div class="card-rack-ears"></div>
         <div class="card-header">
           <div class="card-title">
-            <span class="rack-indicator purple"></span> PEDALBOARD EFFECTS CHAIN
+            <span class="rack-indicator purple"></span>
+            <span>MODULAR PEDALBOARD FX CHAIN</span>
           </div>
-          <div class="fx-header-badges">
-            <span class="badge" id="badge-fx-drive">DRIVE: OFF</span>
-            <span class="badge" id="badge-fx-delay">DELAY: OFF</span>
-            <span class="badge" id="badge-fx-reverb">REVERB: OFF</span>
+          <div class="pedalboard-header-actions">
+            <div class="fx-header-badges" id="pedalboard-header-summary">
+              <span class="badge" id="badge-pedal-count">0 ACTIVE</span>
+            </div>
+            <button type="button" class="btn-add-pedal" id="btn-add-pedal-open" title="Add Effect Pedal from 200+ LV2 Plugins">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              <span>ADD PEDAL</span>
+            </button>
           </div>
         </div>
-        <div class="card-body pedalboard-grid">
-          <!-- Stompbox 1: Pre-Drive (TS-9 Tube Screamer) -->
-          <div class="stompbox-card stomp-drive" id="stomp-drive-card">
-            <div class="stomp-header">
-              <div class="stomp-title">
-                <span class="stomp-led amber" id="led-fx-drive"></span>
-                <span class="stomp-name">TS-9 TUBE SCREAMER</span>
-              </div>
-              <button class="btn-stomp" id="btn-toggle-drive" title="Engage/Bypass Overdrive">
-                <span>STOMP</span>
-              </button>
-            </div>
-            <div class="stomp-controls">
-              <div class="pedal-knob-unit">
-                <span class="knob-label">DRIVE</span>
-                <div class="knob-wrapper" title="Overdrive (Drag or Scroll)">
-                  <svg class="knob-svg" viewBox="0 0 60 60">
-                    <circle class="knob-track-bg" cx="30" cy="30" r="23" />
-                    <circle class="knob-track-val val-amber" cx="30" cy="30" r="23" />
-                  </svg>
-                  <div class="knob-cap">
-                    <div class="knob-indicator"></div>
-                  </div>
-                </div>
-                <span class="knob-readout" id="val-drive-drive">50%</span>
-                <input type="range" class="knob-hidden-input" id="slider-drive-drive" min="0.0" max="1.0" step="0.01" value="0.5" autocomplete="off">
-              </div>
 
-              <div class="pedal-knob-unit">
-                <span class="knob-label">TONE</span>
-                <div class="knob-wrapper" title="Tone Filter (Drag or Scroll)">
-                  <svg class="knob-svg" viewBox="0 0 60 60">
-                    <circle class="knob-track-bg" cx="30" cy="30" r="23" />
-                    <circle class="knob-track-val val-amber" cx="30" cy="30" r="23" />
-                  </svg>
-                  <div class="knob-cap">
-                    <div class="knob-indicator"></div>
-                  </div>
-                </div>
-                <span class="knob-readout" id="val-drive-tone">400 Hz</span>
-                <input type="range" class="knob-hidden-input" id="slider-drive-tone" min="100" max="1000" step="10" value="400" autocomplete="off">
-              </div>
-
-              <div class="pedal-knob-unit">
-                <span class="knob-label">LEVEL</span>
-                <div class="knob-wrapper" title="Pedal Output Level (Drag or Scroll)">
-                  <svg class="knob-svg" viewBox="0 0 60 60">
-                    <circle class="knob-track-bg" cx="30" cy="30" r="23" />
-                    <circle class="knob-track-val val-amber" cx="30" cy="30" r="23" />
-                  </svg>
-                  <div class="knob-cap">
-                    <div class="knob-indicator"></div>
-                  </div>
-                </div>
-                <span class="knob-readout" id="val-drive-level">-10 dB</span>
-                <input type="range" class="knob-hidden-input" id="slider-drive-level" min="-20.0" max="4.0" step="0.5" value="-10.0" autocomplete="off">
-              </div>
-            </div>
-          </div>
-
-          <!-- Stompbox 2: Stereo Delay -->
-          <div class="stompbox-card stomp-delay" id="stomp-delay-card">
-            <div class="stomp-header">
-              <div class="stomp-title">
-                <span class="stomp-led cyan" id="led-fx-delay"></span>
-                <span class="stomp-name">STEREO DELAY</span>
-              </div>
-              <button class="btn-stomp" id="btn-toggle-delay" title="Engage/Bypass Delay">
-                <span>STOMP</span>
-              </button>
-            </div>
-            <div class="stomp-controls">
-              <div class="pedal-knob-unit">
-                <span class="knob-label">TIME</span>
-                <div class="knob-wrapper" title="Delay Time (Drag or Scroll)">
-                  <svg class="knob-svg" viewBox="0 0 60 60">
-                    <circle class="knob-track-bg" cx="30" cy="30" r="23" />
-                    <circle class="knob-track-val val-cyan" cx="30" cy="30" r="23" />
-                  </svg>
-                  <div class="knob-cap">
-                    <div class="knob-indicator"></div>
-                  </div>
-                </div>
-                <span class="knob-readout" id="val-delay-time">350 ms</span>
-                <input type="range" class="knob-hidden-input" id="slider-delay-time" min="20" max="1500" step="10" value="350" autocomplete="off">
-              </div>
-
-              <div class="pedal-knob-unit">
-                <span class="knob-label">FEEDBACK</span>
-                <div class="knob-wrapper" title="Repeats / Modulation (Drag or Scroll)">
-                  <svg class="knob-svg" viewBox="0 0 60 60">
-                    <circle class="knob-track-bg" cx="30" cy="30" r="23" />
-                    <circle class="knob-track-val val-cyan" cx="30" cy="30" r="23" />
-                  </svg>
-                  <div class="knob-cap">
-                    <div class="knob-indicator"></div>
-                  </div>
-                </div>
-                <span class="knob-readout" id="val-delay-lfo">20%</span>
-                <input type="range" class="knob-hidden-input" id="slider-delay-lfo" min="0.2" max="3.0" step="0.1" value="0.2" autocomplete="off">
-              </div>
-
-              <div class="pedal-knob-unit">
-                <span class="knob-label">MIX</span>
-                <div class="knob-wrapper" title="Wet Echo Level (Drag or Scroll)">
-                  <svg class="knob-svg" viewBox="0 0 60 60">
-                    <circle class="knob-track-bg" cx="30" cy="30" r="23" />
-                    <circle class="knob-track-val val-cyan" cx="30" cy="30" r="23" />
-                  </svg>
-                  <div class="knob-cap">
-                    <div class="knob-indicator"></div>
-                  </div>
-                </div>
-                <span class="knob-readout" id="val-delay-level">-8 dB</span>
-                <input type="range" class="knob-hidden-input" id="slider-delay-level" min="-20.0" max="10.0" step="0.5" value="-8.0" autocomplete="off">
-              </div>
-            </div>
-          </div>
-
-          <!-- Stompbox 3: Studio Reverb -->
-          <div class="stompbox-card stomp-reverb" id="stomp-reverb-card">
-            <div class="stomp-header">
-              <div class="stomp-title">
-                <span class="stomp-led purple" id="led-fx-reverb"></span>
-                <span class="stomp-name">STUDIO REVERB</span>
-              </div>
-              <button class="btn-stomp" id="btn-toggle-reverb" title="Engage/Bypass Reverb">
-                <span>STOMP</span>
-              </button>
-            </div>
-            <div class="stomp-controls">
-              <div class="pedal-knob-unit">
-                <span class="knob-label">ROOM</span>
-                <div class="knob-wrapper" title="Room Size (Drag or Scroll)">
-                  <svg class="knob-svg" viewBox="0 0 60 60">
-                    <circle class="knob-track-bg" cx="30" cy="30" r="23" />
-                    <circle class="knob-track-val val-purple" cx="30" cy="30" r="23" />
-                  </svg>
-                  <div class="knob-cap">
-                    <div class="knob-indicator"></div>
-                  </div>
-                </div>
-                <span class="knob-readout" id="val-reverb-room">50%</span>
-                <input type="range" class="knob-hidden-input" id="slider-reverb-room" min="0.0" max="1.0" step="0.02" value="0.5" autocomplete="off">
-              </div>
-
-              <div class="pedal-knob-unit">
-                <span class="knob-label">DAMPING</span>
-                <div class="knob-wrapper" title="High Frequency Damping (Drag or Scroll)">
-                  <svg class="knob-svg" viewBox="0 0 60 60">
-                    <circle class="knob-track-bg" cx="30" cy="30" r="23" />
-                    <circle class="knob-track-val val-purple" cx="30" cy="30" r="23" />
-                  </svg>
-                  <div class="knob-cap">
-                    <div class="knob-indicator"></div>
-                  </div>
-                </div>
-                <span class="knob-readout" id="val-reverb-damp">30%</span>
-                <input type="range" class="knob-hidden-input" id="slider-reverb-damp" min="0.0" max="1.0" step="0.02" value="0.3" autocomplete="off">
-              </div>
-
-              <div class="pedal-knob-unit">
-                <span class="knob-label">DRY / WET</span>
-                <div class="knob-wrapper" title="Reverb Mix Level (Drag or Scroll)">
-                  <svg class="knob-svg" viewBox="0 0 60 60">
-                    <circle class="knob-track-bg" cx="30" cy="30" r="23" />
-                    <circle class="knob-track-val val-purple" cx="30" cy="30" r="23" />
-                  </svg>
-                  <div class="knob-cap">
-                    <div class="knob-indicator"></div>
-                  </div>
-                </div>
-                <span class="knob-readout" id="val-reverb-mix">30%</span>
-                <input type="range" class="knob-hidden-input" id="slider-reverb-mix" min="0" max="100" step="1" value="30" autocomplete="off">
-              </div>
-            </div>
-          </div>
+        <!-- Dynamic Modular Pedalboard Slots Container -->
+        <div class="card-body pedalboard-grid" id="pedalboard-slots-container">
+          <!-- Dynamically populated pedal slots -->
         </div>
       </section>
 
@@ -875,6 +709,51 @@
       <button class="btn-exit-metro" id="btn-metro-exit">
         HIDE PANEL &bull; KEEP RUNNING
       </button>
+    </div>
+  </div>
+
+  <!-- Modal: Add Modular LV2 Pedal from System Library -->
+  <div class="pedal-modal-overlay hidden" id="pedal-modal-overlay">
+    <div class="pedal-modal">
+      <div class="pedal-modal-ears"></div>
+      <div class="pedal-modal-header">
+        <div class="pedal-modal-title">
+          <span class="rack-indicator purple"></span>
+          <span>LV2 PEDALBOARD LIBRARY</span>
+          <span class="pedal-modal-count" id="txt-plugin-count">(200+ Plugins Available)</span>
+        </div>
+        <button class="pedal-modal-close" id="btn-pedal-modal-close" title="Close Library">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Search & Category Filters -->
+      <div class="pedal-filter-bar">
+        <div class="pedal-search-box">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+          </svg>
+          <input type="text" id="input-pedal-search" placeholder="Search plugins (e.g. TS9, DS1, Chorus, Delay, Muff, Reverb, Tape)..." autocomplete="off">
+        </div>
+        <div class="pedal-category-pills" id="pedal-cat-pills">
+          <button type="button" class="pedal-cat-pill active" data-cat="all">ALL</button>
+          <button type="button" class="pedal-cat-pill" data-cat="featured">★ FEATURED</button>
+          <button type="button" class="pedal-cat-pill" data-cat="distortion">DRIVES & FUZZ</button>
+          <button type="button" class="pedal-cat-pill" data-cat="modulation">MODULATION</button>
+          <button type="button" class="pedal-cat-pill" data-cat="delay">DELAY & ECHO</button>
+          <button type="button" class="pedal-cat-pill" data-cat="reverb">REVERB</button>
+          <button type="button" class="pedal-cat-pill" data-cat="dynamics">DYNAMICS & GATE</button>
+          <button type="button" class="pedal-cat-pill" data-cat="filter">FILTER & EQ</button>
+          <button type="button" class="pedal-cat-pill" data-cat="pitch">PITCH & OCTAVE</button>
+        </div>
+      </div>
+
+      <!-- Plugin Cards Grid -->
+      <div class="pedal-catalog-grid" id="pedal-catalog-grid">
+        <!-- Dynamically rendered plugin selection cards -->
+      </div>
     </div>
   </div>
 
