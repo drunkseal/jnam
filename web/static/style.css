@@ -220,6 +220,96 @@ body.daw-workspace {
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
+/* Header Metronome Trigger Button */
+.btn-rack-metro {
+  background: linear-gradient(180deg, #2c3240 0%, #1e222b 100%);
+  border: 1px solid #3f475b;
+  border-top: 1px solid #525d77;
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: var(--radius-control);
+  font-size: 0.76rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  letter-spacing: 1.2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: all 0.15s ease;
+  box-shadow: 
+    0 2px 5px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  position: relative;
+}
+
+.btn-rack-metro .metro-svg {
+  color: var(--meter-blue);
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.5));
+}
+
+.btn-rack-metro:hover {
+  background: linear-gradient(180deg, #373f50 0%, #252b36 100%);
+  border-color: var(--meter-blue);
+  box-shadow: 
+    0 0 12px rgba(56, 189, 248, 0.35),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.btn-rack-metro:active {
+  transform: translateY(1px);
+  background: #1b1e26;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.btn-rack-metro.active {
+  border-color: var(--meter-green);
+  box-shadow: 
+    0 0 14px rgba(38, 208, 124, 0.35),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.btn-rack-metro.active .metro-svg {
+  color: var(--meter-green);
+  filter: drop-shadow(0 0 6px rgba(38, 208, 124, 0.8));
+}
+
+.metro-header-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2a313d;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.8);
+  transition: background-color 0.05s ease, box-shadow 0.05s ease;
+}
+
+.metro-header-led.pulse {
+  background: var(--meter-green);
+  box-shadow: 0 0 8px var(--meter-green), 0 0 14px var(--meter-green);
+}
+
+.metro-header-led.pulse-accent {
+  background: #00e5ff;
+  box-shadow: 0 0 10px #00e5ff, 0 0 16px #00e5ff;
+}
+
+.metro-header-badge {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #94a3b8;
+  background: #151821;
+  border: 1px solid #2a3140;
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 2px;
+}
+
+.btn-rack-metro.active .metro-header-badge {
+  color: var(--meter-green);
+  border-color: rgba(38, 208, 124, 0.5);
+}
+
 /* Recessed LCD Screen in Header */
 .transport-lcd {
   background: var(--bg-recessed);
@@ -1777,6 +1867,604 @@ body.daw-workspace {
 }
 
 /* ==============================================================================
+   STUDIO PRACTICE METRONOME (19" RACKMOUNT DUAL-OUTPUT DESIGN)
+   ============================================================================== */
+.metro-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(8, 10, 14, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.metro-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.metro-modal {
+  background: #171a22;
+  border: 1px solid #2e3545;
+  border-top: 1px solid #4a5570;
+  border-radius: var(--radius-chassis);
+  width: 100%;
+  max-width: 540px;
+  max-height: 94vh;
+  overflow-y: auto;
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  box-shadow: 
+    0 25px 70px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(0, 0, 0, 0.6);
+  position: relative;
+}
+
+.metro-rack-ears {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.metro-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #222633;
+  padding-bottom: 10px;
+}
+
+.metro-title {
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.metro-close-btn {
+  background: #1f2430;
+  border: 1px solid #333c50;
+  color: #94a3b8;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.metro-close-btn:hover {
+  background: #283040;
+  color: #fff;
+  border-color: #4a5570;
+}
+
+/* Visual LCD Display Box */
+.metro-display-box {
+  background: #080a0e;
+  border: 1px solid #1a1e28;
+  border-radius: var(--radius-module);
+  padding: 20px 16px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.9);
+  position: relative;
+  overflow: hidden;
+}
+
+.metro-screen-reflection {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+
+.metro-tempo-badge-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.metro-tempo-badge {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #00e5ff;
+  letter-spacing: 2px;
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 4px;
+  padding: 3px 10px;
+}
+
+.metro-bpm-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin: 4px 0 8px 0;
+}
+
+.metro-bpm-number {
+  font-family: var(--font-mono);
+  font-size: 4rem;
+  font-weight: 900;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+  letter-spacing: 2px;
+}
+
+.metro-bpm-unit {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+
+/* Beat Dots Indicator */
+.metro-dots-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 6px 0 14px 0;
+  min-height: 22px;
+}
+
+.metro-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #151820;
+  border: 2px solid #282f40;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8);
+  transition: transform 0.05s ease, background 0.05s ease, box-shadow 0.05s ease;
+}
+
+.metro-dot.active {
+  background: var(--meter-green);
+  border-color: #8bf0ba;
+  box-shadow: 0 0 12px var(--meter-green), 0 0 20px var(--meter-green);
+  transform: scale(1.18);
+}
+
+.metro-dot.accent.active {
+  background: #00e5ff;
+  border-color: #b3f7ff;
+  box-shadow: 0 0 16px #00e5ff, 0 0 26px #00e5ff;
+  transform: scale(1.28);
+}
+
+/* Pendulum Sweep Track */
+.metro-sweep-track {
+  width: 100%;
+  max-width: 380px;
+  height: 8px;
+  background: #11141b;
+  border: 1px solid #232836;
+  border-radius: 4px;
+  position: relative;
+  overflow: visible;
+  margin-top: 4px;
+}
+
+.metro-sweep-needle {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #00e5ff;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px #00e5ff;
+  transform: translateX(-50%);
+  will-change: left;
+}
+
+/* Quick Steppers & Tap Tempo Row */
+.metro-quick-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.metro-btn-step {
+  background: linear-gradient(180deg, #242936 0%, #1a1e27 100%);
+  border: 1px solid #333c4f;
+  border-top: 1px solid #4a5770;
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.metro-btn-step:hover {
+  background: linear-gradient(180deg, #2e3545 0%, #202632 100%);
+  border-color: #00e5ff;
+  color: #fff;
+}
+
+.metro-btn-step:active {
+  transform: translateY(1px);
+  background: #141720;
+}
+
+.metro-btn-tap {
+  flex: 1;
+  max-width: 170px;
+  background: linear-gradient(180deg, #2d3444 0%, #1c212c 100%);
+  border: 1px solid #414b60;
+  border-top: 1px solid #586683;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  user-select: none;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.metro-btn-tap:hover {
+  background: linear-gradient(180deg, #374053 0%, #232a38 100%);
+  border-color: #00e5ff;
+}
+
+.metro-btn-tap.tapped {
+  transform: scale(0.96);
+  background: #00e5ff;
+  color: #000;
+  border-color: #fff;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.7);
+}
+
+/* Tempo Slider Row */
+.metro-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #11141b;
+  border: 1px solid #222735;
+  border-radius: var(--radius-control);
+  padding: 8px 14px;
+}
+
+.metro-slider-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.metro-slider-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.metro-bpm-slider {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: #1c212c;
+  outline: none;
+}
+
+.metro-bpm-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #e2e8f0 0%, #94a3b8 100%);
+  border: 2px solid #2a3140;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  transition: background 0.15s, transform 0.1s;
+}
+
+.metro-bpm-slider::-webkit-slider-thumb:hover {
+  background: #00e5ff;
+  border-color: #fff;
+  transform: scale(1.15);
+}
+
+/* Settings Grid (Time Sig & Subdivision) */
+.metro-settings-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 12px;
+}
+
+.metro-setting-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #11141b;
+  border: 1px solid #222735;
+  border-radius: var(--radius-control);
+  padding: 10px 12px;
+}
+
+.metro-section-label {
+  font-family: var(--font-mono);
+  font-size: 0.63rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.8px;
+}
+
+.metro-pills-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.metro-pill {
+  background: #181c26;
+  border: 1px solid #282f3f;
+  border-radius: 4px;
+  color: #94a3b8;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 5px 8px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.metro-pill:hover {
+  background: #202634;
+  color: #fff;
+  border-color: #3b465e;
+}
+
+.metro-pill.active {
+  background: rgba(0, 229, 255, 0.12);
+  border-color: #00e5ff;
+  color: #00e5ff;
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.25);
+}
+
+/* Sound & Volume Row */
+.metro-sound-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.metro-sound-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #11141b;
+  border: 1px solid #222735;
+  border-radius: var(--radius-control);
+  padding: 10px 12px;
+}
+
+.metro-vol-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metro-vol-pct {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.metro-dropdown {
+  background: #161922;
+  border: 1px solid #2d3546;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 6px 8px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.metro-dropdown:focus {
+  border-color: #00e5ff;
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+}
+
+/* Output Routing Destinations */
+.metro-routing-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #11141b;
+  border: 1px solid #222735;
+  border-radius: var(--radius-control);
+  padding: 10px 12px;
+}
+
+.metro-routing-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.metro-toggle-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.metro-toggle-box input[type="checkbox"] {
+  display: none;
+}
+
+.metro-custom-chk {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: #181c25;
+  border: 1px solid #333c50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.metro-toggle-box input[type="checkbox"]:checked + .metro-custom-chk {
+  background: #00e5ff;
+  border-color: #fff;
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.4);
+}
+
+.metro-toggle-box input[type="checkbox"]:checked + .metro-custom-chk::after {
+  content: "✔";
+  font-size: 11px;
+  font-weight: 900;
+  color: #000;
+}
+
+.metro-chk-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+/* Master Stomp Button */
+.metro-stomp-row {
+  margin-top: 4px;
+}
+
+.btn-metro-master-stomp {
+  width: 100%;
+  background: linear-gradient(180deg, #2b3342 0%, #1b202a 100%);
+  border: 2px solid #3d475c;
+  border-top: 2px solid #576582;
+  color: #fff;
+  padding: 14px 16px;
+  border-radius: var(--radius-control);
+  font-size: 0.95rem;
+  font-weight: 900;
+  font-family: var(--font-mono);
+  letter-spacing: 1.6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.15s ease;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-metro-master-stomp:hover {
+  background: linear-gradient(180deg, #353f52 0%, #222936 100%);
+  border-color: #00e5ff;
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.25);
+}
+
+.btn-metro-master-stomp:active {
+  transform: translateY(1px);
+}
+
+.btn-metro-master-stomp.active {
+  background: linear-gradient(180deg, #1b382d 0%, #10241d 100%);
+  border-color: var(--meter-green);
+  border-top-color: #4eed9d;
+  color: #fff;
+  box-shadow: 
+    0 0 20px rgba(38, 208, 124, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.metro-stomp-led {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #333d4e;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
+  transition: all 0.1s ease;
+}
+
+.btn-metro-master-stomp.active .metro-stomp-led {
+  background: var(--meter-green);
+  box-shadow: 0 0 10px var(--meter-green), 0 0 18px var(--meter-green);
+}
+
+/* Exit Metronome Button */
+.btn-exit-metro {
+  width: 100%;
+  background: transparent;
+  border: 1px dashed #333c4f;
+  color: #94a3b8;
+  padding: 10px;
+  border-radius: var(--radius-control);
+  font-size: 0.74rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  letter-spacing: 1.2px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-exit-metro:hover {
+  background: #171c26;
+  border-color: #4e5b77;
+  color: #fff;
+}
+
+/* ==============================================================================
    RESPONSIVE ERGONOMICS (WIDESCREEN, LAPTOP, TABLET & MOBILE)
    ============================================================================== */
 
@@ -1835,6 +2523,13 @@ body.daw-workspace {
   .tuner-note-name {
     font-size: 3.8rem;
   }
+  .metro-settings-grid,
+  .metro-sound-row {
+    grid-template-columns: 1fr;
+  }
+  .metro-bpm-number {
+    font-size: 3.2rem;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1867,9 +2562,22 @@ body.daw-workspace {
   .lcd-val {
     font-size: 0.65rem;
   }
-  .btn-rack-tuner {
+  .btn-rack-tuner,
+  .btn-rack-metro {
     padding: 4px 8px;
     font-size: 0.65rem;
+  }
+  .metro-modal {
+    padding: 16px 14px;
+    gap: 12px;
+  }
+  .metro-quick-row {
+    flex-wrap: wrap;
+  }
+  .metro-btn-tap {
+    order: -1;
+    width: 100%;
+    max-width: none;
   }
   .card-header {
     padding: 8px 10px;

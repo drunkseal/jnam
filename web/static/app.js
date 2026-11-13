@@ -14,6 +14,7 @@ const API = {
   setQuality: '/api/quality',
   tunerStream: '/api/tuner/stream',
   tunerStop: '/api/tuner/stop',
+  metronome: '/api/metronome',
   service: '/api/service'
 };
 
@@ -132,6 +133,35 @@ const selectTunerTuning = document.getElementById('select-tuner-tuning');
 const tunerStringsStrip = document.getElementById('tuner-strings-strip');
 const tunerTargetBadge = document.getElementById('tuner-target-badge');
 const tunerQuickPills = document.querySelectorAll('.tuner-pill');
+
+// Metronome Elements
+const btnMetroOpen = document.getElementById('btn-metro-open');
+const btnMetroClose = document.getElementById('btn-metro-close');
+const btnMetroExit = document.getElementById('btn-metro-exit');
+const metroOverlay = document.getElementById('metro-overlay');
+const ledHeaderMetro = document.getElementById('led-header-metro');
+const badgeHeaderBpm = document.getElementById('badge-header-bpm');
+const metroStatusIndicator = document.getElementById('metro-status-indicator');
+const metroTempoMark = document.getElementById('metro-tempo-mark');
+const metroBpmText = document.getElementById('metro-bpm-text');
+const metroDotsRow = document.getElementById('metro-dots-row');
+const metroSweepNeedle = document.getElementById('metro-sweep-needle');
+const btnMetroM5 = document.getElementById('btn-metro-m5');
+const btnMetroM1 = document.getElementById('btn-metro-m1');
+const btnMetroTap = document.getElementById('btn-metro-tap');
+const btnMetroP1 = document.getElementById('btn-metro-p1');
+const btnMetroP5 = document.getElementById('btn-metro-p5');
+const metroBpmSlider = document.getElementById('metro-bpm-slider');
+const metroBeatsPills = document.querySelectorAll('#metro-beats-pills .metro-pill');
+const metroSubdivPills = document.querySelectorAll('#metro-subdiv-pills .metro-pill');
+const selectMetroSound = document.getElementById('select-metro-sound');
+const metroVolSlider = document.getElementById('metro-vol-slider');
+const txtMetroVol = document.getElementById('txt-metro-vol');
+const metroCheckHw = document.getElementById('metro-check-hw');
+const metroCheckWeb = document.getElementById('metro-check-web');
+const btnMetroToggle = document.getElementById('btn-metro-toggle');
+const metroStompLed = document.getElementById('metro-stomp-led');
+const metroStompText = document.getElementById('metro-stomp-text');
 
 // Fetch Status
 async function updateStatus() {
@@ -408,6 +438,11 @@ function renderStatus(data) {
         updateKnobVisual(sliderReverbMix);
       }
     }
+  }
+
+  // Metronome state sync
+  if (data.metronome) {
+    renderMetronomeStatus(data.metronome);
   }
 
   // Always sync all knob visuals
@@ -1078,6 +1113,560 @@ if (tunerQuickPills) {
   });
 }
 
+/* ==============================================================================
+   STUDIO PRACTICE METRONOME MODULE (DUAL JACK HW & WEB AUDIO ENGINE)
+   ============================================================================== */
+
+const metroState = {
+  enabled: false,
+  bpm: 120,
+  beats: 4,
+  subdiv: 1,
+  volume: 0.8,
+  sound: 0,
+  hwEnabled: true,
+  webEnabled: true
+};
+
+let isUserDraggingMetro = false;
+let metroSyncTimeout = null;
+let tapTimestamps = [];
+let metroAudioCtx = null;
+let metroSchedulerTimer = null;
+let metroNextNoteTime = 0.0;
+let metroCurrentSubdivIndex = 0;
+let metroAnimFrameId = null;
+
+// Lazy initialize AudioContext on user interaction
+function getMetroAudioContext() {
+  if (!metroAudioCtx) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) {
+      metroAudioCtx = new AudioContextClass();
+    }
+  }
+  if (metroAudioCtx && metroAudioCtx.state === 'suspended') {
+    metroAudioCtx.resume().catch(() => {});
+  }
+  return metroAudioCtx;
+}
+
+// Tempo Markings
+function getTempoMarking(bpm) {
+  if (bpm < 60) return 'LARGO';
+  if (bpm < 76) return 'ADAGIO';
+  if (bpm < 108) return 'ANDANTE';
+  if (bpm <= 120) return 'MODERATO';
+  if (bpm < 168) return 'ALLEGRO';
+  if (bpm <= 200) return 'PRESTO';
+  return 'PRESTISSIMO';
+}
+
+// Render dynamic beat dots
+function renderMetroDots() {
+  if (!metroDotsRow) return;
+  metroDotsRow.innerHTML = '';
+  for (let i = 0; i < metroState.beats; i++) {
+    const dot = document.createElement('span');
+    dot.className = i === 0 ? 'metro-dot accent' : 'metro-dot';
+    dot.dataset.beat = i;
+    metroDotsRow.appendChild(dot);
+  }
+}
+
+// Update all Metronome UI elements to reflect metroState
+function updateMetroUI() {
+  const bpm = Math.round(metroState.bpm);
+  if (badgeHeaderBpm) badgeHeaderBpm.textContent = bpm;
+  if (metroBpmText) metroBpmText.textContent = bpm;
+  if (metroBpmSlider && !isUserDraggingMetro) metroBpmSlider.value = bpm;
+  if (metroTempoMark) metroTempoMark.textContent = getTempoMarking(bpm);
+
+  if (txtMetroVol) txtMetroVol.textContent = `${Math.round(metroState.volume * 100)}%`;
+  if (metroVolSlider && !isUserDraggingMetro) metroVolSlider.value = Math.round(metroState.volume * 100);
+
+  if (selectMetroSound) selectMetroSound.value = String(metroState.sound);
+  if (metroCheckHw) metroCheckHw.checked = !!metroState.hwEnabled;
+  if (metroCheckWeb) metroCheckWeb.checked = !!metroState.webEnabled;
+
+  // Active state on header button
+  if (btnMetroOpen) btnMetroOpen.classList.toggle('active', !!metroState.enabled);
+  if (btnMetroToggle) {
+    btnMetroToggle.classList.toggle('active', !!metroState.enabled);
+    if (metroStompText) {
+      metroStompText.textContent = metroState.enabled ? 'STOP METRONOME' : 'START METRONOME';
+    }
+  }
+
+  // Time signature pills
+  if (metroBeatsPills) {
+    metroBeatsPills.forEach(pill => {
+      pill.classList.toggle('active', parseInt(pill.dataset.beats) === metroState.beats);
+    });
+  }
+
+  // Subdivision pills
+  if (metroSubdivPills) {
+    metroSubdivPills.forEach(pill => {
+      pill.classList.toggle('active', parseInt(pill.dataset.subdiv) === metroState.subdiv);
+    });
+  }
+}
+
+// Flash visual beat
+function triggerBeatFlash(beatIndex, isAccent) {
+  // Flash header LED
+  if (ledHeaderMetro) {
+    ledHeaderMetro.className = isAccent ? 'metro-header-led pulse-accent' : 'metro-header-led pulse';
+    setTimeout(() => {
+      if (ledHeaderMetro) ledHeaderMetro.className = 'metro-header-led';
+    }, 80);
+  }
+
+  // Flash modal beat dots
+  if (metroDotsRow) {
+    const dots = metroDotsRow.querySelectorAll('.metro-dot');
+    dots.forEach((dot, idx) => {
+      if (idx === beatIndex) {
+        dot.classList.add('active');
+        setTimeout(() => dot.classList.remove('active'), 90);
+      } else {
+        dot.classList.remove('active');
+      }
+    });
+  }
+}
+
+// Smooth Visual Pendulum Sweep Animation
+function startMetroAnimation() {
+  if (metroAnimFrameId) cancelAnimationFrame(metroAnimFrameId);
+
+  function frame() {
+    if (!metroState.enabled) {
+      if (metroSweepNeedle) metroSweepNeedle.style.left = '50%';
+      return;
+    }
+
+    const ctx = metroAudioCtx;
+    const now = ctx ? ctx.currentTime : (performance.now() / 1000);
+    const beatDuration = 60.0 / Math.max(20, metroState.bpm);
+    const barDuration = beatDuration * 2; // sweeps left-to-right on beat 1, right-to-left on beat 2
+    const phase = (now % barDuration) / barDuration; // 0..1
+    const tri = phase < 0.5 ? (phase * 2) : ((1 - phase) * 2); // 0 -> 1 -> 0
+    const leftPct = 8 + tri * 84; // 8% to 92%
+
+    if (metroSweepNeedle) {
+      metroSweepNeedle.style.left = `${leftPct.toFixed(1)}%`;
+    }
+
+    metroAnimFrameId = requestAnimationFrame(frame);
+  }
+
+  metroAnimFrameId = requestAnimationFrame(frame);
+}
+
+function stopMetroAnimation() {
+  if (metroAnimFrameId) {
+    cancelAnimationFrame(metroAnimFrameId);
+    metroAnimFrameId = null;
+  }
+  if (metroSweepNeedle) metroSweepNeedle.style.left = '50%';
+}
+
+// Web Audio API Synthesizer (4 Studio Sounds)
+function playWebAudioClick(time, isAccent, isBeat) {
+  if (!metroState.webEnabled) return;
+  const ctx = getMetroAudioContext();
+  if (!ctx) return;
+
+  const masterVol = Math.max(0, Math.min(1, metroState.volume));
+  if (masterVol <= 0.001) return;
+
+  const gainScale = isAccent ? 1.0 : (isBeat ? 0.72 : 0.45);
+  const clickGain = masterVol * gainScale;
+  const sound = metroState.sound;
+
+  if (sound === 0) {
+    // 0: Digital Beep (crisp high-cut studio sine)
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const freq = isAccent ? 1760 : (isBeat ? 880 : 660);
+    osc.frequency.setValueAtTime(freq, time);
+    osc.type = 'sine';
+
+    gain.gain.setValueAtTime(clickGain * 0.9, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.035);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(time);
+    osc.stop(time + 0.038);
+
+  } else if (sound === 1) {
+    // 1: Acoustic Woodblock (dual-tone hollow pitch sweep)
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    const baseFreq = isAccent ? 1200 : 850;
+    osc1.frequency.setValueAtTime(baseFreq, time);
+    osc1.frequency.exponentialRampToValueAtTime(320, time + 0.04);
+    osc1.type = 'sine';
+
+    osc2.frequency.setValueAtTime(baseFreq * 2.3, time);
+    osc2.frequency.exponentialRampToValueAtTime(600, time + 0.035);
+    osc2.type = 'sine';
+
+    gain.gain.setValueAtTime(clickGain * 0.85, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.042);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start(time);
+    osc2.start(time);
+    osc1.stop(time + 0.045);
+    osc2.stop(time + 0.045);
+
+  } else if (sound === 2) {
+    // 2: Cross-Stick / Rimshot (bandpass filtered noise burst + ping)
+    const bufferSize = Math.floor(ctx.sampleRate * 0.035);
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+    const whiteNoise = ctx.createBufferSource();
+    whiteNoise.buffer = noiseBuffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(isAccent ? 3200 : 2400, time);
+    filter.Q.setValueAtTime(3.0, time);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(clickGain * 0.65, time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.032);
+
+    whiteNoise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+
+    const osc = ctx.createOscillator();
+    const oscGain = ctx.createGain();
+    osc.frequency.setValueAtTime(isAccent ? 650 : 420, time);
+    osc.type = 'triangle';
+    oscGain.gain.setValueAtTime(clickGain * 0.7, time);
+    oscGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.035);
+
+    osc.connect(oscGain);
+    oscGain.connect(ctx.destination);
+
+    whiteNoise.start(time);
+    osc.start(time);
+    whiteNoise.stop(time + 0.035);
+    osc.stop(time + 0.038);
+
+  } else {
+    // 3: Rock Cowbell (two metallic square-sine tones with ringing resonance)
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    const f1 = isAccent ? 587 : 540;
+    const f2 = isAccent ? 880 : 800;
+    osc1.frequency.setValueAtTime(f1, time);
+    osc1.type = 'sine';
+    osc2.frequency.setValueAtTime(f2, time);
+    osc2.type = 'square';
+
+    gain.gain.setValueAtTime(clickGain * 0.6, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.08);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start(time);
+    osc2.start(time);
+    osc1.stop(time + 0.085);
+    osc2.stop(time + 0.085);
+  }
+}
+
+// Lookahead Scheduler
+function startMetroScheduler() {
+  stopMetroScheduler();
+  const ctx = getMetroAudioContext();
+  if (!ctx) return;
+
+  metroNextNoteTime = ctx.currentTime + 0.05;
+  metroCurrentSubdivIndex = 0;
+
+  const scheduleAheadTime = 0.1; // 100ms
+  const lookaheadInterval = 25;  // 25ms
+
+  metroSchedulerTimer = setInterval(() => {
+    if (!metroState.enabled) return;
+
+    while (metroNextNoteTime < ctx.currentTime + scheduleAheadTime) {
+      const subdiv = Math.max(1, metroState.subdiv);
+      const beats = Math.max(1, metroState.beats);
+      const totalSubdivsInBar = beats * subdiv;
+
+      const subdivInBeat = metroCurrentSubdivIndex % subdiv;
+      const beatInBar = Math.floor(metroCurrentSubdivIndex / subdiv) % beats;
+
+      const isAccent = (beatInBar === 0 && subdivInBeat === 0);
+      const isBeat = (subdivInBeat === 0);
+
+      // Play Web Audio click
+      playWebAudioClick(metroNextNoteTime, isAccent, isBeat);
+
+      // Visual flash on beats
+      if (isBeat) {
+        const delayMs = Math.max(0, (metroNextNoteTime - ctx.currentTime) * 1000);
+        const b = beatInBar;
+        const acc = isAccent;
+        setTimeout(() => triggerBeatFlash(b, acc), delayMs);
+      }
+
+      // Advance time
+      const secPerSubdiv = 60.0 / (Math.max(20, metroState.bpm) * subdiv);
+      metroNextNoteTime += secPerSubdiv;
+      metroCurrentSubdivIndex = (metroCurrentSubdivIndex + 1) % totalSubdivsInBar;
+    }
+  }, lookaheadInterval);
+
+  startMetroAnimation();
+}
+
+function stopMetroScheduler() {
+  if (metroSchedulerTimer) {
+    clearInterval(metroSchedulerTimer);
+    metroSchedulerTimer = null;
+  }
+  stopMetroAnimation();
+}
+
+// Tap Tempo Handler
+function handleMetroTap() {
+  const now = performance.now();
+  if (btnMetroTap) {
+    btnMetroTap.classList.add('tapped');
+    setTimeout(() => btnMetroTap.classList.remove('tapped'), 120);
+  }
+
+  if (tapTimestamps.length > 0 && (now - tapTimestamps[tapTimestamps.length - 1]) > 2500) {
+    tapTimestamps = [];
+  }
+
+  tapTimestamps.push(now);
+  if (tapTimestamps.length > 5) tapTimestamps.shift();
+
+  if (tapTimestamps.length >= 2) {
+    let total = 0;
+    for (let i = 1; i < tapTimestamps.length; i++) {
+      total += (tapTimestamps[i] - tapTimestamps[i - 1]);
+    }
+    const avg = total / (tapTimestamps.length - 1);
+    let calculatedBpm = Math.round(60000 / avg);
+    calculatedBpm = Math.max(20, Math.min(300, calculatedBpm));
+    setMetroBpm(calculatedBpm);
+  }
+}
+
+// BPM Setter
+function setMetroBpm(newBpm) {
+  const clamped = Math.max(20, Math.min(300, Math.round(newBpm)));
+  metroState.bpm = clamped;
+  updateMetroUI();
+  syncMetroWithBackend(80);
+}
+
+// Backend Sync
+function syncMetroWithBackend(debounceMs = 0) {
+  clearTimeout(metroSyncTimeout);
+  const doSend = () => {
+    fetch(API.metronome, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        enabled: !!metroState.enabled,
+        bpm: parseFloat(metroState.bpm),
+        beats: parseInt(metroState.beats),
+        subdiv: parseInt(metroState.subdiv),
+        volume: parseFloat(metroState.volume),
+        sound: parseInt(metroState.sound),
+        hw_enabled: !!metroState.hwEnabled
+      })
+    }).catch(err => console.error('Metronome sync error:', err));
+  };
+
+  if (debounceMs > 0) {
+    metroSyncTimeout = setTimeout(doSend, debounceMs);
+  } else {
+    doSend();
+  }
+}
+
+// Master Toggle
+async function toggleMetronome() {
+  metroState.enabled = !metroState.enabled;
+  getMetroAudioContext();
+  updateMetroUI();
+
+  if (metroState.enabled) {
+    startMetroScheduler();
+  } else {
+    stopMetroScheduler();
+  }
+
+  syncMetroWithBackend(0);
+}
+
+// Modal open / close
+function openMetronome() {
+  if (metroOverlay) metroOverlay.classList.remove('hidden');
+  getMetroAudioContext();
+}
+
+function closeMetronome() {
+  if (metroOverlay) metroOverlay.classList.add('hidden');
+}
+
+// Sync from backend telemetry
+function renderMetronomeStatus(dataMetro) {
+  if (!dataMetro || isUserDraggingMetro) return;
+
+  let changed = false;
+  if (dataMetro.bpm !== undefined && Math.abs(metroState.bpm - dataMetro.bpm) > 0.1) {
+    metroState.bpm = dataMetro.bpm;
+    changed = true;
+  }
+  if (dataMetro.beats !== undefined && metroState.beats !== dataMetro.beats) {
+    metroState.beats = dataMetro.beats;
+    renderMetroDots();
+    changed = true;
+  }
+  if (dataMetro.subdiv !== undefined && metroState.subdiv !== dataMetro.subdiv) {
+    metroState.subdiv = dataMetro.subdiv;
+    changed = true;
+  }
+  if (dataMetro.volume !== undefined && Math.abs(metroState.volume - dataMetro.volume) > 0.02) {
+    metroState.volume = dataMetro.volume;
+    changed = true;
+  }
+  if (dataMetro.sound !== undefined && metroState.sound !== dataMetro.sound) {
+    metroState.sound = dataMetro.sound;
+    changed = true;
+  }
+  if (dataMetro.hw_enabled !== undefined && metroState.hwEnabled !== dataMetro.hw_enabled) {
+    metroState.hwEnabled = dataMetro.hw_enabled;
+    changed = true;
+  }
+  if (dataMetro.enabled !== undefined && metroState.enabled !== dataMetro.enabled) {
+    metroState.enabled = dataMetro.enabled;
+    if (metroState.enabled) {
+      startMetroScheduler();
+    } else {
+      stopMetroScheduler();
+    }
+    changed = true;
+  }
+
+  if (changed) {
+    updateMetroUI();
+  }
+}
+
+// Metronome Event Listeners
+if (btnMetroOpen) btnMetroOpen.addEventListener('click', openMetronome);
+if (btnMetroClose) btnMetroClose.addEventListener('click', closeMetronome);
+if (btnMetroExit) btnMetroExit.addEventListener('click', closeMetronome);
+if (btnMetroToggle) btnMetroToggle.addEventListener('click', toggleMetronome);
+if (btnMetroTap) btnMetroTap.addEventListener('click', handleMetroTap);
+
+if (btnMetroM5) btnMetroM5.addEventListener('click', () => setMetroBpm(metroState.bpm - 5));
+if (btnMetroM1) btnMetroM1.addEventListener('click', () => setMetroBpm(metroState.bpm - 1));
+if (btnMetroP1) btnMetroP1.addEventListener('click', () => setMetroBpm(metroState.bpm + 1));
+if (btnMetroP5) btnMetroP5.addEventListener('click', () => setMetroBpm(metroState.bpm + 5));
+
+if (metroBpmSlider) {
+  metroBpmSlider.addEventListener('input', (e) => {
+    isUserDraggingMetro = true;
+    const v = parseInt(e.target.value);
+    metroState.bpm = v;
+    if (metroBpmText) metroBpmText.textContent = v;
+    if (badgeHeaderBpm) badgeHeaderBpm.textContent = v;
+    if (metroTempoMark) metroTempoMark.textContent = getTempoMarking(v);
+  });
+  metroBpmSlider.addEventListener('change', (e) => {
+    isUserDraggingMetro = false;
+    setMetroBpm(parseInt(e.target.value));
+  });
+}
+
+if (metroBeatsPills) {
+  metroBeatsPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      const b = parseInt(pill.dataset.beats);
+      metroState.beats = b;
+      renderMetroDots();
+      updateMetroUI();
+      syncMetroWithBackend(0);
+    });
+  });
+}
+
+if (metroSubdivPills) {
+  metroSubdivPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      const s = parseInt(pill.dataset.subdiv);
+      metroState.subdiv = s;
+      updateMetroUI();
+      syncMetroWithBackend(0);
+    });
+  });
+}
+
+if (selectMetroSound) {
+  selectMetroSound.addEventListener('change', (e) => {
+    metroState.sound = parseInt(e.target.value);
+    syncMetroWithBackend(0);
+  });
+}
+
+if (metroVolSlider) {
+  metroVolSlider.addEventListener('input', (e) => {
+    isUserDraggingMetro = true;
+    const pct = parseInt(e.target.value);
+    metroState.volume = pct / 100.0;
+    if (txtMetroVol) txtMetroVol.textContent = `${pct}%`;
+  });
+  metroVolSlider.addEventListener('change', (e) => {
+    isUserDraggingMetro = false;
+    const pct = parseInt(e.target.value);
+    metroState.volume = pct / 100.0;
+    syncMetroWithBackend(50);
+  });
+}
+
+if (metroCheckHw) {
+  metroCheckHw.addEventListener('change', (e) => {
+    metroState.hwEnabled = e.target.checked;
+    syncMetroWithBackend(0);
+  });
+}
+
+if (metroCheckWeb) {
+  metroCheckWeb.addEventListener('change', (e) => {
+    metroState.webEnabled = e.target.checked;
+    if (metroState.webEnabled) getMetroAudioContext();
+  });
+}
+
 selectModel.addEventListener('change', async (e) => {
   displayModelName.textContent = 'Switching model...';
   try {
@@ -1490,6 +2079,8 @@ loadIrs();
 loadDevices();
 initRotaryKnobs();
 setTuning(currentTuningKey);
+renderMetroDots();
+updateMetroUI();
 updateStatus();
 setInterval(updateStatus, 4000);
 

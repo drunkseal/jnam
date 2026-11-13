@@ -34,6 +34,18 @@
           <span>TUNER</span>
         </button>
 
+        <!-- Metronome Trigger Button -->
+        <button class="btn-rack-metro" id="btn-metro-open" title="Open Studio Metronome">
+          <span class="metro-header-led" id="led-header-metro"></span>
+          <svg class="metro-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2l7 19H5L12 2z"/>
+            <path d="M12 8v8"/>
+            <circle cx="12" cy="11" r="1.5" fill="currentColor"/>
+          </svg>
+          <span>METRO</span>
+          <span class="metro-header-badge" id="badge-header-bpm">120</span>
+        </button>
+
         <div class="transport-lcd">
           <div class="lcd-cell" id="pill-jack">
             <span class="meter-led red" id="led-jack"></span>
@@ -717,6 +729,151 @@
       <!-- Exit Button -->
       <button class="btn-exit-tuner" id="btn-tuner-close">
         EXIT TUNER &bull; UNMUTE AUDIO
+      </button>
+    </div>
+  </div>
+
+  <!-- Real-Time Studio Metronome Modal Overlay -->
+  <div class="metro-overlay hidden" id="metro-overlay">
+    <div class="metro-modal">
+      <div class="metro-rack-ears"></div>
+
+      <!-- Header -->
+      <div class="metro-header">
+        <div class="metro-title">
+          <span class="rack-indicator green" id="metro-status-indicator"></span>
+          <span>JNAM STUDIO METRONOME</span>
+        </div>
+        <button class="metro-close-btn" id="btn-metro-close" title="Close Panel (Metronome continues running in background)">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Main Visual Display Box (Digital LCD / Strobe style) -->
+      <div class="metro-display-box">
+        <div class="metro-screen-reflection"></div>
+        <div class="metro-tempo-badge-wrap">
+          <span class="metro-tempo-badge" id="metro-tempo-mark">MODERATO</span>
+        </div>
+        <div class="metro-bpm-row">
+          <span class="metro-bpm-number" id="metro-bpm-text">120</span>
+          <span class="metro-bpm-unit">BPM</span>
+        </div>
+        
+        <!-- Animated Beat Dots -->
+        <div class="metro-dots-row" id="metro-dots-row">
+          <span class="metro-dot accent active"></span>
+          <span class="metro-dot"></span>
+          <span class="metro-dot"></span>
+          <span class="metro-dot"></span>
+        </div>
+
+        <!-- Dynamic Visual Pendulum / Sweep Gauge -->
+        <div class="metro-sweep-track">
+          <div class="metro-sweep-needle" id="metro-sweep-needle"></div>
+        </div>
+      </div>
+
+      <!-- Quick Steppers & Tap Tempo Row -->
+      <div class="metro-quick-row">
+        <button type="button" class="metro-btn-step" id="btn-metro-m5" title="Minus 5 BPM">-5</button>
+        <button type="button" class="metro-btn-step" id="btn-metro-m1" title="Minus 1 BPM">-1</button>
+        <button type="button" class="metro-btn-tap" id="btn-metro-tap" title="Tap repeatedly in rhythm to detect tempo">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v3.74c1.21-.81 2-2.18 2-3.74a4.5 4.5 0 0 0-9 0c0 1.56.79 2.93 2 3.74zM16 13h-1v-2a3.5 3.5 0 0 0-6 0v2H8a5 5 0 0 0-5 5v1h18v-1a5 5 0 0 0-5-5z"/>
+          </svg>
+          <span>TAP TEMPO</span>
+        </button>
+        <button type="button" class="metro-btn-step" id="btn-metro-p1" title="Plus 1 BPM">+1</button>
+        <button type="button" class="metro-btn-step" id="btn-metro-p5" title="Plus 5 BPM">+5</button>
+      </div>
+
+      <!-- Fine Tempo Slider Track -->
+      <div class="metro-slider-row">
+        <span class="metro-slider-label">20</span>
+        <div class="metro-slider-wrap">
+          <input type="range" class="metro-bpm-slider" id="metro-bpm-slider" min="20" max="300" step="1" value="120">
+        </div>
+        <span class="metro-slider-label">300</span>
+      </div>
+
+      <!-- Time Signature & Subdivisions Section -->
+      <div class="metro-settings-grid">
+        <div class="metro-setting-col">
+          <span class="metro-section-label">TIME SIGNATURE</span>
+          <div class="metro-pills-wrap" id="metro-beats-pills">
+            <button type="button" class="metro-pill" data-beats="1">1/1</button>
+            <button type="button" class="metro-pill" data-beats="2">2/4</button>
+            <button type="button" class="metro-pill" data-beats="3">3/4</button>
+            <button type="button" class="metro-pill active" data-beats="4">4/4</button>
+            <button type="button" class="metro-pill" data-beats="5">5/4</button>
+            <button type="button" class="metro-pill" data-beats="6">6/8</button>
+            <button type="button" class="metro-pill" data-beats="7">7/8</button>
+          </div>
+        </div>
+
+        <div class="metro-setting-col">
+          <span class="metro-section-label">SUBDIVISION</span>
+          <div class="metro-pills-wrap" id="metro-subdiv-pills">
+            <button type="button" class="metro-pill active" data-subdiv="1" title="Quarter Notes (1 click per beat)">♩ 1/4</button>
+            <button type="button" class="metro-pill" data-subdiv="2" title="Eighth Notes (2 clicks per beat)">♫ 1/8</button>
+            <button type="button" class="metro-pill" data-subdiv="3" title="Triplets (3 clicks per beat)">♫3 1/8T</button>
+            <button type="button" class="metro-pill" data-subdiv="4" title="Sixteenth Notes (4 clicks per beat)">♬ 1/16</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sound & Volume Row -->
+      <div class="metro-sound-row">
+        <div class="metro-sound-col">
+          <span class="metro-section-label">SOUND PRESET</span>
+          <select id="select-metro-sound" class="metro-dropdown">
+            <option value="0" selected>Digital Beep (High Cut)</option>
+            <option value="1">Acoustic Woodblock</option>
+            <option value="2">Cross-Stick / Rimshot</option>
+            <option value="3">Rock Cowbell</option>
+          </select>
+        </div>
+
+        <div class="metro-sound-col">
+          <div class="metro-vol-label-row">
+            <span class="metro-section-label">CLICK VOLUME</span>
+            <span class="metro-vol-pct" id="txt-metro-vol">80%</span>
+          </div>
+          <input type="range" class="metro-bpm-slider" id="metro-vol-slider" min="0" max="100" step="1" value="80">
+        </div>
+      </div>
+
+      <!-- Output Routing Destinations -->
+      <div class="metro-routing-row">
+        <span class="metro-section-label">AUDIO DESTINATIONS</span>
+        <div class="metro-routing-toggles">
+          <label class="metro-toggle-box" title="Plays directly through Scarlett Solo headphones/monitors via JACK">
+            <input type="checkbox" id="metro-check-hw" checked>
+            <span class="metro-custom-chk"></span>
+            <span class="metro-chk-label">Scarlett Solo / Jack HW</span>
+          </label>
+          <label class="metro-toggle-box" title="Plays directly through this browser device (phone/tablet/laptop speaker)">
+            <input type="checkbox" id="metro-check-web" checked>
+            <span class="metro-custom-chk"></span>
+            <span class="metro-chk-label">Browser Device Audio</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Master Stomp Play/Stop Button -->
+      <div class="metro-stomp-row">
+        <button type="button" class="btn-metro-master-stomp" id="btn-metro-toggle">
+          <div class="metro-stomp-led" id="metro-stomp-led"></div>
+          <span class="metro-stomp-text" id="metro-stomp-text">START METRONOME</span>
+        </button>
+      </div>
+
+      <!-- Exit Button -->
+      <button class="btn-exit-metro" id="btn-metro-exit">
+        HIDE PANEL &bull; KEEP RUNNING
       </button>
     </div>
   </div>

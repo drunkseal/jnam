@@ -122,9 +122,17 @@ if [ -f "${INSTALL_DIR}/src/tone.c" ]; then
     }
 fi
 
+if [ -f "${INSTALL_DIR}/src/metronome.c" ]; then
+    echo -e "Compiling hardware JACK metronome engine..."
+    gcc -O2 "${INSTALL_DIR}/src/metronome.c" -o "${INSTALL_DIR}/bin/jnam-metronome" -ljack -lm -lpthread || {
+        echo -e "${YELLOW}Warning: Failed to compile metronome binary. Continuing...${RESET}"
+    }
+fi
+
 chmod +x "${INSTALL_DIR}/bin/jnam"
 [ -f "${INSTALL_DIR}/bin/jnam-tuner" ] && chmod +x "${INSTALL_DIR}/bin/jnam-tuner"
 [ -f "${INSTALL_DIR}/bin/jnam-tone" ] && chmod +x "${INSTALL_DIR}/bin/jnam-tone"
+[ -f "${INSTALL_DIR}/bin/jnam-metronome" ] && chmod +x "${INSTALL_DIR}/bin/jnam-metronome"
 chmod +x "${INSTALL_DIR}/scripts/"*.sh
 chmod +x "${INSTALL_DIR}/web/server.py"
 
@@ -135,6 +143,9 @@ if [ -f "${INSTALL_DIR}/bin/jnam-tuner" ]; then
 fi
 if [ -f "${INSTALL_DIR}/bin/jnam-tone" ]; then
     ln -sf "${INSTALL_DIR}/bin/jnam-tone" /usr/local/bin/jnam-tone
+fi
+if [ -f "${INSTALL_DIR}/bin/jnam-metronome" ]; then
+    ln -sf "${INSTALL_DIR}/bin/jnam-metronome" /usr/local/bin/jnam-metronome
 fi
 
 # ------------------------------------------------------------------------------

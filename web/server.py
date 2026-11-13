@@ -30,6 +30,7 @@ FIFO_PATH = "/tmp/nam_control.fifo"
 DRIVE_FIFO = "/tmp/nam_drive.fifo"
 DELAY_FIFO = "/tmp/nam_delay.fifo"
 REVERB_FIFO = "/tmp/nam_reverb.fifo"
+METRONOME_FIFO = "/tmp/nam_metronome.fifo"
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 DEFAULT_FX = {
@@ -54,14 +55,26 @@ DEFAULT_FX = {
     }
 }
 
+DEFAULT_METRONOME = {
+    "enabled": False,
+    "bpm": 120.0,
+    "beats": 4,
+    "subdiv": 1,
+    "volume": 0.8,
+    "sound": 0,
+    "hw_enabled": True
+}
+
 state_cache = {
     "input_level": 0.0,
     "output_level": 0.0,
     "quality_scale": 1.0,
-    "tuner_active": False
+    "tuner_active": False,
+    "metronome": DEFAULT_METRONOME.copy()
 }
 
 tuner_process = None
+metronome_process = None
 
 def get_models():
     return sorted(glob.glob(os.path.join(MODELS_DIR, "**/*.nam"), recursive=True))
@@ -494,6 +507,79 @@ def stop_tuner():
     apply_jack_routing_live()
     send_fifo(f"output_level = {state_cache['output_level']}")
 
+def ensure_metronome_running():
+    global metronome_process
+    if metronome_process and metronome_process.poll() is None:
+        return True
+
+    bin_paths = [
+        "/usr/local/bin/jnam-metronome",
+        "/opt/jnam/bin/jnam-metronome",
+        os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "bin", "jnam-metronome")
+    ]
+    metro_bin = next((p for p in bin_paths if os.path.exists(p) and os.access(p, os.X_OK)), None)
+    if not metro_bin:
+        print("[metronome] Warning: jnam-metronome binary not found.")
+        return False
+
+    try:
+        metronome_process = subprocess.Popen(
+            [metro_bin],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        time.sleep(0.08)
+        return True
+    except Exception as e:
+        print(f"[metronome] Failed starting metronome binary: {e}")
+        return False
+
+def send_metronome_cmd(cmd):
+    if not os.path.exists(METRONOME_FIFO):
+        try:
+            os.mkfifo(METRONOME_FIFO, 0o666)
+        except OSError:
+            pass
+    try:
+        fd = os.open(METRONOME_FIFO, os.O_WRONLY | os.O_NONBLOCK)
+        os.write(fd, f"{cmd}\n".encode("utf-8"))
+        os.close(fd)
+        return True
+    except Exception:
+        return False
+
+def update_metronome_params(params):
+    metro = state_cache.setdefault("metronome", DEFAULT_METRONOME.copy())
+    metro.update(params)
+
+    if metro.get("hw_enabled", True) and metro.get("enabled", False):
+        ensure_metronome_running()
+        send_metronome_cmd(f"BPM {float(metro['bpm']):.1f}")
+        send_metronome_cmd(f"BEATS {int(metro['beats'])}")
+        send_metronome_cmd(f"SUBDIV {int(metro['subdiv'])}")
+        send_metronome_cmd(f"VOL {float(metro['volume']):.2f}")
+        send_metronome_cmd(f"SOUND {int(metro['sound'])}")
+        send_metronome_cmd("START")
+    else:
+        send_metronome_cmd("STOP")
+
+    return metro
+
+def stop_metronome():
+    global metronome_process
+    send_metronome_cmd("STOP")
+    send_metronome_cmd("QUIT")
+    if metronome_process:
+        try:
+            metronome_process.terminate()
+            metronome_process.wait(timeout=0.4)
+        except Exception:
+            try:
+                metronome_process.kill()
+            except Exception:
+                pass
+        metronome_process = None
+
 def restart_service():
     for svc in ["jnam.service", "nam-rig.service"]:
         try:
@@ -619,6 +705,7 @@ def get_full_status():
         "tuner": {
             "active": state_cache["tuner_active"]
         },
+        "metronome": state_cache.setdefault("metronome", DEFAULT_METRONOME.copy()),
         "telemetry": {
             "jalv_cpu": jalv_cpu,
             "jackd_cpu": jackd_cpu,
@@ -697,6 +784,9 @@ class JNAMHandler(BaseHTTPRequestHandler):
             return
         elif path == "/api/fx":
             self.send_json(get_fx_state())
+            return
+        elif path == "/api/metronome":
+            self.send_json(state_cache.setdefault("metronome", DEFAULT_METRONOME.copy()))
             return
         elif path == "/api/tuner/stream":
             # Server-Sent Events (SSE) Real-Time Pitch Data Stream
@@ -915,6 +1005,11 @@ class JNAMHandler(BaseHTTPRequestHandler):
             self.send_json({"success": True, "active": False})
             return
 
+        elif path == "/api/metronome":
+            new_metro = update_metronome_params(req_data)
+            self.send_json({"success": True, "metronome": new_metro})
+            return
+
         elif path == "/api/service":
             action = req_data.get("action", "restart").lower()
             if action == "restart":
@@ -935,6 +1030,7 @@ def run_server(host="0.0.0.0", port=8080):
     except KeyboardInterrupt:
         print("\nStopping JNAM Web Controller...")
         stop_tuner()
+        stop_metronome()
         server.server_close()
 
 if __name__ == "__main__":
