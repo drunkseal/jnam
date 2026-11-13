@@ -549,4 +549,4 @@ loadModels();
 loadIrs();
 loadDevices();
 updateStatus();
-setInterval(updateStatus, 1500);
+setInterval(updateStatus, 4000);

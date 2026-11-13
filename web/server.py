@@ -47,6 +47,8 @@ def get_current_model():
         return os.path.realpath(CURRENT_MODEL)
     return None
 
+_metadata_cache = {}
+
 def get_current_ir():
     if os.path.islink(CURRENT_IR):
         return os.path.realpath(CURRENT_IR)
@@ -55,10 +57,15 @@ def get_current_ir():
 def get_model_metadata(model_path):
     if not model_path or not os.path.exists(model_path):
         return {}
+    real = os.path.realpath(model_path)
+    if real in _metadata_cache:
+        return _metadata_cache[real]
     try:
-        with open(model_path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(real, "r", encoding="utf-8", errors="ignore") as f:
             data = json.load(f)
-            return data.get("metadata", {})
+            meta = data.get("metadata", {})
+            _metadata_cache[real] = meta
+            return meta
     except Exception:
         return {}
 
@@ -339,60 +346,71 @@ def restart_jack():
             pass
     return False
 
-def get_full_status():
-    try:
-        jack_active = subprocess.call(["jack_wait", "-c"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
-    except Exception:
-        jack_active = False
+_last_cpu_time = 0.0
+_cached_cpu = (0.0, 0.0)
 
-    rig_status = "inactive"
-    for svc in ["jnam.service", "nam-rig.service"]:
-        try:
-            out = subprocess.check_output(["systemctl", "is-active", svc], stderr=subprocess.DEVNULL).decode().strip()
-            if out == "active":
-                rig_status = "active"
-                break
-        except Exception:
-            pass
+def is_process_running(proc_name):
+    try:
+        for pid in os.listdir("/proc"):
+            if pid.isdigit():
+                try:
+                    with open(f"/proc/{pid}/comm", "r") as f:
+                        if proc_name in f.read():
+                            return True
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return False
+
+def get_full_status():
+    global _last_cpu_time, _cached_cpu
+    now = time.time()
+
+    jack_active = is_process_running("jackd")
+    rig_active = is_process_running("jalv")
 
     cur_m = get_current_model()
     meta = get_model_metadata(cur_m) if cur_m else {}
     cur_ir = get_current_ir()
     cab_mode = get_cab_mode()
     cab_active = is_cab_effective_enabled()
+    in_chan = get_input_channel()
+    out_chan = get_output_channel()
 
-    connections = {}
-    try:
-        lsp_out = subprocess.check_output(["jack_lsp", "-c"], stderr=subprocess.DEVNULL).decode().splitlines()
-        cur_port = None
-        for line in lsp_out:
-            if not line.startswith("   "):
-                cur_port = line.strip()
-                connections[cur_port] = []
-            else:
-                if cur_port:
-                    connections[cur_port].append(line.strip())
-    except Exception:
-        pass
+    # Pre-calculated routing map (avoids jack_lsp locking the real-time audio graph)
+    in_ports = []
+    if in_chan in ["both", "1"]: in_ports.append("system:capture_1")
+    if in_chan in ["both", "2"]: in_ports.append("system:capture_2")
+    connections = {
+        "nam:input": in_ports,
+        "system:playback_1": ["nam:output"],
+        "system:playback_2": ["nam:output"]
+    }
 
-    jalv_cpu = 0.0
-    jackd_cpu = 0.0
-    try:
-        ps_out = subprocess.check_output(["ps", "-eo", "comm,%cpu"], stderr=subprocess.DEVNULL).decode()
-        for line in ps_out.splitlines():
-            parts = line.strip().split()
-            if len(parts) >= 2:
-                comm, cpu_str = parts[0], parts[1]
-                if "jalv" in comm:
-                    jalv_cpu = float(cpu_str)
-                elif "jackd" in comm:
-                    jackd_cpu = float(cpu_str)
-    except Exception:
-        pass
+    # Throttle CPU inspection to once every 5 seconds
+    if now - _last_cpu_time > 5.0:
+        _last_cpu_time = now
+        jalv_cpu, jackd_cpu = 0.0, 0.0
+        try:
+            ps_out = subprocess.check_output(["ps", "-eo", "comm,%cpu"], stderr=subprocess.DEVNULL).decode()
+            for line in ps_out.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 2:
+                    comm, cpu_str = parts[0], parts[1]
+                    if "jalv" in comm:
+                        jalv_cpu = float(cpu_str)
+                    elif "jackd" in comm:
+                        jackd_cpu = float(cpu_str)
+            _cached_cpu = (jalv_cpu, jackd_cpu)
+        except Exception:
+            pass
+    else:
+        jalv_cpu, jackd_cpu = _cached_cpu
 
     return {
         "jack_running": jack_active,
-        "rig_running": rig_status == "active",
+        "rig_running": rig_active,
         "current_model": {
             "path": cur_m,
             "filename": os.path.basename(cur_m) if cur_m else None,
