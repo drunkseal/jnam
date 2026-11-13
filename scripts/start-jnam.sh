@@ -156,7 +156,7 @@ trap cleanup EXIT
 # CPU Core Pinning for Real-Time Isolation
 # Core 3: 100% Dedicated to Neural Amp Modeler (WaveNet DSP)
 # Core 2: Dedicated to Cab IR (jconvolver), Pedalboard FX, and JACK Driver
-NUM_CPUS=$(nproc || echo 1)
+NUM_CPUS=$(nproc --all 2>/dev/null || nproc || echo 1)
 NAM_AFFINITY=""
 CAB_AFFINITY=""
 if [ "$NUM_CPUS" -ge 4 ]; then

@@ -9,7 +9,7 @@ for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
 done
 
 # 2. CPU Core Pinning for Real-Time Isolation (Dedicated Audio Driver Core)
-NUM_CPUS=$(nproc || echo 1)
+NUM_CPUS=$(nproc --all 2>/dev/null || nproc || echo 1)
 JACK_AFFINITY=""
 if [ "$NUM_CPUS" -ge 4 ]; then
     JACK_AFFINITY="taskset -c 2"
