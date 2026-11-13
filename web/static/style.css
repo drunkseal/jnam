@@ -923,15 +923,19 @@ body.daw-workspace {
   background: linear-gradient(180deg, #2e3544 0%, #1b1f29 100%);
   border: 1px solid #455066;
   border-radius: 4px;
-  padding: 4px 10px;
+  padding: 8px 12px;
+  min-height: 40px;
   font-family: var(--font-mono);
-  font-size: 0.65rem;
+  font-size: 0.70rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--text-secondary);
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   transition: all 0.15s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-stomp:hover {
@@ -972,7 +976,26 @@ body.daw-workspace {
 }
 
 .pro-slider.mini {
-  height: 4px;
+  height: 24px;
+  touch-action: pan-x;
+}
+
+.pro-slider.mini::-webkit-slider-runnable-track {
+  height: 6px;
+  background: #090b0f;
+  border: 1px solid #1e2430;
+  border-radius: 3px;
+}
+
+.pro-slider.mini::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #5a647a 0%, #20242e 100%);
+  border: 1px solid #101217;
+  border-top: 1px solid #7583a0;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.7);
 }
 
 /* ==============================================================================
@@ -1438,17 +1461,21 @@ body.daw-workspace {
 }
 
 /* ==============================================================================
-   RESPONSIVE ERGONOMICS
+   RESPONSIVE ERGONOMICS (DESKTOP, TABLET & MOBILE)
    ============================================================================== */
 @media (max-width: 768px) {
   body.daw-workspace {
-    padding: 8px;
+    padding: 6px;
   }
   .rack-chassis {
-    padding: 10px;
+    padding: 8px;
     gap: 10px;
+    border-radius: 6px;
   }
   .rack-grid {
+    grid-template-columns: 1fr;
+  }
+  .pedalboard-grid {
     grid-template-columns: 1fr;
   }
   .channel-routing-grid {
@@ -1457,7 +1484,56 @@ body.daw-workspace {
   .sliders-grid {
     grid-template-columns: 1fr;
   }
+  .patchbay-strip {
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 10px;
+  }
   .tuner-note-name {
-    font-size: 4.2rem;
+    font-size: 3.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .rack-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .rack-brand {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .rack-transport {
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .transport-lcd {
+    flex: 1;
+    padding: 4px 8px;
+    gap: 6px;
+  }
+  .lcd-cell {
+    gap: 4px;
+  }
+  .lcd-label {
+    font-size: 0.55rem;
+  }
+  .lcd-val {
+    font-size: 0.65rem;
+  }
+  .btn-rack-tuner {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+  }
+  .card-header {
+    padding: 8px 10px;
+  }
+  .card-body {
+    padding: 10px;
+  }
+  .stompbox-card {
+    padding: 10px 12px;
   }
 }
