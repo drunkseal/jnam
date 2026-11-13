@@ -801,6 +801,25 @@ body.daw-workspace {
   box-shadow: 0 0 6px var(--meter-blue);
 }
 
+.buffer-routing-group {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.buffer-btn-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.buffer-btn-grid .chan-btn {
+  justify-content: center;
+  padding: 8px 6px;
+  font-size: 0.70rem;
+}
+
 /* ==============================================================================
    DAW MIXER TRACK FADERS & DSP DYNAMICS
    ============================================================================== */

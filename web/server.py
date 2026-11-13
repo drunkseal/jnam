@@ -21,6 +21,7 @@ CURRENT_IR = os.path.join(NAM_DIR, "current_ir.wav")
 CAB_CONF = os.path.join(NAM_DIR, "cab.conf")
 CAB_MODE_FILE = os.path.join(NAM_DIR, "cab_mode")
 AUDIO_DEV_FILE = os.path.join(NAM_DIR, "audio_device")
+BUFFER_FILE = os.path.join(NAM_DIR, "buffer_size")
 IN_CHAN_FILE = os.path.join(NAM_DIR, "input_channel")
 OUT_CHAN_FILE = os.path.join(NAM_DIR, "output_channel")
 CONNECTIONS_XML = os.path.join(NAM_DIR, "connections.xml")
@@ -164,6 +165,75 @@ def get_alsa_cards():
     except Exception:
         pass
     return cards
+
+def get_hardware_audio_params():
+    rate = 48000
+    period_size = None
+    periods = 3
+    # 1. Read directly from active ALSA hw_params (zero latency impact, zero audio graph lock)
+    try:
+        for pcm_path in glob.glob("/proc/asound/card*/pcm0p/sub0/hw_params"):
+            with open(pcm_path, "r") as f:
+                content = f.read()
+            m_rate = re.search(r'^rate:\s*(\d+)', content, re.MULTILINE)
+            m_period = re.search(r'^period_size:\s*(\d+)', content, re.MULTILINE)
+            m_buf = re.search(r'^buffer_size:\s*(\d+)', content, re.MULTILINE)
+            if m_rate:
+                rate = int(m_rate.group(1))
+            if m_period:
+                period_size = int(m_period.group(1))
+            if m_buf and m_period and int(m_period.group(1)) > 0:
+                periods = int(m_buf.group(1)) // int(m_period.group(1))
+            if period_size is not None:
+                break
+    except Exception:
+        pass
+
+    # 2. Try jack_bufsize if ALSA card was not parsed
+    if period_size is None:
+        try:
+            out = subprocess.check_output(["jack_bufsize"], stderr=subprocess.DEVNULL).decode().strip()
+            if out and out.isdigit():
+                period_size = int(out)
+        except Exception:
+            pass
+
+    # 3. Fallback to file or default 256
+    if period_size is None and os.path.exists(BUFFER_FILE):
+        try:
+            with open(BUFFER_FILE, "r") as f:
+                val = f.read().strip()
+                if val.isdigit():
+                    period_size = int(val)
+        except Exception:
+            pass
+
+    if period_size is None:
+        period_size = 256
+
+    latency_ms = round((period_size / float(rate)) * 1000.0, 2)
+    return {
+        "sample_rate": rate,
+        "buffer_size": period_size,
+        "periods": periods,
+        "latency_ms": latency_ms
+    }
+
+def set_buffer_size(size):
+    try:
+        size = int(size)
+    except ValueError:
+        return False
+    os.makedirs(NAM_DIR, exist_ok=True)
+    with open(BUFFER_FILE, "w") as f:
+        f.write(str(size) + "\n")
+    applied_live = False
+    try:
+        ret = subprocess.call(["jack_bufsize", str(size)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        applied_live = (ret == 0)
+    except Exception:
+        pass
+    return applied_live
 
 def generate_connections_xml(in_chan=None, out_chan=None, cab_enabled=None):
     if in_chan is None:
@@ -408,6 +478,8 @@ def get_full_status():
     else:
         jalv_cpu, jackd_cpu = _cached_cpu
 
+    hw_p = get_hardware_audio_params()
+
     return {
         "jack_running": jack_active,
         "rig_running": rig_active,
@@ -433,7 +505,11 @@ def get_full_status():
             "configured_device": get_audio_device(),
             "input_channel": get_input_channel(),
             "output_channel": get_output_channel(),
-            "available_cards": get_alsa_cards()
+            "available_cards": get_alsa_cards(),
+            "buffer_size": hw_p["buffer_size"],
+            "sample_rate": hw_p["sample_rate"],
+            "periods": hw_p["periods"],
+            "latency_ms": hw_p["latency_ms"]
         },
         "dsp": state_cache,
         "tuner": {
@@ -442,7 +518,10 @@ def get_full_status():
         "telemetry": {
             "jalv_cpu": jalv_cpu,
             "jackd_cpu": jackd_cpu,
-            "routing": connections
+            "routing": connections,
+            "buffer_size": hw_p["buffer_size"],
+            "sample_rate": hw_p["sample_rate"],
+            "latency_ms": hw_p["latency_ms"]
         }
     }
 
@@ -659,6 +738,26 @@ class JNAMHandler(BaseHTTPRequestHandler):
                 "output_channel": get_output_channel(),
                 "device": get_audio_device()
             })
+            return
+
+        elif path == "/api/buffer":
+            buf_size = req_data.get("buffer_size")
+            try:
+                buf_size = int(buf_size)
+            except Exception:
+                buf_size = None
+            if buf_size in [64, 128, 256, 512, 1024]:
+                applied = set_buffer_size(buf_size)
+                hw_p = get_hardware_audio_params()
+                self.send_json({
+                    "success": True,
+                    "applied_live": applied,
+                    "buffer_size": hw_p["buffer_size"],
+                    "sample_rate": hw_p["sample_rate"],
+                    "latency_ms": hw_p["latency_ms"]
+                })
+            else:
+                self.send_json({"success": False, "error": "Invalid buffer size. Options: 64, 128, 256, 512, 1024"}, code=400)
             return
 
         elif path == "/api/gain":

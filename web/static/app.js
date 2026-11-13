@@ -8,6 +8,7 @@ const API = {
   setIr: '/api/ir',
   setCab: '/api/cab',
   setRouting: '/api/routing',
+  setBuffer: '/api/buffer',
   setGain: '/api/gain',
   setQuality: '/api/quality',
   tunerStream: '/api/tuner/stream',
@@ -20,6 +21,7 @@ let isUserDraggingGain = false;
 let tunerEventSource = null;
 
 // DOM Elements
+const headerMetaStats = document.getElementById('header-meta-stats');
 const txtJack = document.getElementById('txt-jack');
 const ledJack = document.getElementById('led-jack');
 const txtRig = document.getElementById('txt-rig');
@@ -49,6 +51,7 @@ const selectAudioDevice = document.getElementById('select-audio-device');
 const deviceBadge = document.getElementById('device-badge');
 const inChanButtons = document.querySelectorAll('#in-channel-group .chan-btn');
 const outChanButtons = document.querySelectorAll('#out-channel-group .chan-btn');
+const bufferButtons = document.querySelectorAll('#buffer-size-group .chan-btn');
 const footerHardwareInfo = document.getElementById('footer-hardware-info');
 
 // DSP Controls
@@ -187,7 +190,20 @@ function renderStatus(data) {
       });
     }
     deviceBadge.textContent = activeCardName.toUpperCase();
-    footerHardwareInfo.textContent = `${activeCardName} • JACK2 48kHz / 128 Buffer`;
+
+    const sRate = hw.sample_rate ? (hw.sample_rate / 1000).toFixed(0) : '48';
+    const bSize = hw.buffer_size || 256;
+    const latMs = hw.latency_ms !== undefined ? hw.latency_ms : ((bSize / 48000) * 1000).toFixed(2);
+
+    if (headerMetaStats) {
+      headerMetaStats.textContent = `${sRate} kHz • ${bSize} spl • ${latMs} ms`;
+    }
+    footerHardwareInfo.textContent = `${activeCardName} • JACK2 ${sRate}kHz / ${bSize} Buffer (${latMs} ms)`;
+
+    // Highlight active buffer button
+    bufferButtons.forEach(btn => {
+      btn.classList.toggle('active', parseInt(btn.dataset.buf) === hw.buffer_size);
+    });
   }
 
   // Quality button
@@ -440,6 +456,23 @@ outChanButtons.forEach(btn => {
         body: JSON.stringify({ output_channel: chan })
       });
       setTimeout(updateStatus, 200);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+});
+
+bufferButtons.forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const bufSize = parseInt(btn.dataset.buf);
+    bufferButtons.forEach(b => b.classList.toggle('active', b === btn));
+    try {
+      await fetch(API.setBuffer, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buffer_size: bufSize })
+      });
+      setTimeout(updateStatus, 300);
     } catch (err) {
       console.error(err);
     }

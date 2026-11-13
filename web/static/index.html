@@ -21,7 +21,7 @@
         </div>
         <div class="brand-meta">
           <span class="meta-title">JACK NEURAL AMP MODELER</span>
-          <span class="meta-stats">48 kHz &bull; 128 spl &bull; 2.67 ms</span>
+          <span class="meta-stats" id="header-meta-stats">48 kHz &bull; 256 spl &bull; 5.33 ms</span>
         </div>
       </div>
 
@@ -262,6 +262,24 @@
                   <span>Right (2)</span>
                 </button>
               </div>
+            </div>
+          </div>
+
+          <div class="buffer-routing-group">
+            <label class="field-label">AUDIO BUFFER SIZE & LATENCY</label>
+            <div class="buffer-btn-grid" id="buffer-size-group">
+              <button class="chan-btn" data-buf="128">
+                <span class="chan-led"></span>
+                <span>128 spl (2.7 ms)</span>
+              </button>
+              <button class="chan-btn active" data-buf="256">
+                <span class="chan-led"></span>
+                <span>256 spl (5.3 ms)</span>
+              </button>
+              <button class="chan-btn" data-buf="512">
+                <span class="chan-led"></span>
+                <span>512 spl (10.7 ms)</span>
+              </button>
             </div>
           </div>
         </div>

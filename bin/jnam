@@ -18,6 +18,7 @@ CURRENT_IR = os.path.join(NAM_DIR, "current_ir.wav")
 CAB_CONF = os.path.join(NAM_DIR, "cab.conf")
 CAB_MODE_FILE = os.path.join(NAM_DIR, "cab_mode")
 AUDIO_DEV_FILE = os.path.join(NAM_DIR, "audio_device")
+BUFFER_FILE = os.path.join(NAM_DIR, "buffer_size")
 IN_CHAN_FILE = os.path.join(NAM_DIR, "input_channel")
 OUT_CHAN_FILE = os.path.join(NAM_DIR, "output_channel")
 CONNECTIONS_XML = os.path.join(NAM_DIR, "connections.xml")
@@ -170,6 +171,75 @@ def get_alsa_cards():
         pass
     return cards
 
+def get_audio_params():
+    rate = 48000
+    period_size = None
+    periods = 3
+    # 1. Try reading from active ALSA hw_params (zero overhead / zero JACK lock)
+    try:
+        for pcm_path in glob.glob("/proc/asound/card*/pcm0p/sub0/hw_params"):
+            with open(pcm_path, "r") as f:
+                content = f.read()
+            m_rate = re.search(r'^rate:\s*(\d+)', content, re.MULTILINE)
+            m_period = re.search(r'^period_size:\s*(\d+)', content, re.MULTILINE)
+            m_buf = re.search(r'^buffer_size:\s*(\d+)', content, re.MULTILINE)
+            if m_rate:
+                rate = int(m_rate.group(1))
+            if m_period:
+                period_size = int(m_period.group(1))
+            if m_buf and m_period and int(m_period.group(1)) > 0:
+                periods = int(m_buf.group(1)) // int(m_period.group(1))
+            if period_size is not None:
+                break
+    except Exception:
+        pass
+
+    # 2. Try jack_bufsize if ALSA card was not parsed
+    if period_size is None:
+        try:
+            out = subprocess.check_output(["jack_bufsize"], stderr=subprocess.DEVNULL).decode().strip()
+            if out and out.isdigit():
+                period_size = int(out)
+        except Exception:
+            pass
+
+    # 3. Fallback to file or default 256
+    if period_size is None and os.path.exists(BUFFER_FILE):
+        try:
+            with open(BUFFER_FILE, "r") as f:
+                val = f.read().strip()
+                if val.isdigit():
+                    period_size = int(val)
+        except Exception:
+            pass
+
+    if period_size is None:
+        period_size = 256
+
+    latency_ms = round((period_size / float(rate)) * 1000.0, 2)
+    return {
+        "sample_rate": rate,
+        "buffer_size": period_size,
+        "periods": periods,
+        "latency_ms": latency_ms
+    }
+
+def set_buffer_size(size):
+    try:
+        size = int(size)
+    except ValueError:
+        return False
+    os.makedirs(NAM_DIR, exist_ok=True)
+    with open(BUFFER_FILE, "w") as f:
+        f.write(str(size) + "\n")
+    applied_live = False
+    try:
+        ret = subprocess.call(["jack_bufsize", str(size)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        applied_live = (ret == 0)
+    except Exception:
+        pass
+    return applied_live
+
 def send_fifo(cmd):
     if os.path.exists(FIFO_PATH):
         try:
@@ -226,6 +296,9 @@ def cmd_status(args=None):
             active_card_name = f"{c['name']} [{c['hw']}]"
             break
     print(f"  {BOLD}Audio Hardware:{RESET}      {GREEN}{active_card_name}{RESET} {DIM}[conf: {cur_dev}]{RESET}")
+
+    hw_p = get_audio_params()
+    print(f"  {BOLD}Buffer & Latency:{RESET}    {GREEN}{hw_p['buffer_size']} samples{RESET} {DIM}({hw_p['latency_ms']} ms @ {hw_p['sample_rate']} Hz, {hw_p['periods']} periods){RESET}")
 
     in_chan = get_input_channel()
     in_desc = "Input 1 (Mic) & Input 2 (Guitar) [Summed]" if in_chan == "both" else (f"Input {in_chan} Only")
@@ -346,6 +419,26 @@ def cmd_channel(args):
 
     restart_service()
     cmd_status()
+
+def cmd_buffer(args):
+    hw_p = get_audio_params()
+    if not args.size:
+        print(f"\n{BOLD}{CYAN}=== Audio Buffer & Latency ==={RESET}")
+        print(f"  Current Buffer:     {GREEN}{hw_p['buffer_size']} samples{RESET}")
+        print(f"  Sample Rate:        {CYAN}{hw_p['sample_rate']} Hz{RESET}")
+        print(f"  Periods:            {CYAN}{hw_p['periods']}{RESET}")
+        print(f"  Calculated Latency: {YELLOW}{hw_p['latency_ms']} ms{RESET}")
+        print(f"\nAvailable buffer options: 64, 128, 256, 512, 1024")
+        print(f"To change: jnam buffer <size>  (e.g. jnam buffer 256)\n")
+        return
+
+    target = int(args.size)
+    applied = set_buffer_size(target)
+    new_hw = get_audio_params()
+    if applied:
+        print(f"\n{GREEN}✓ Buffer size dynamically switched to {target} samples ({new_hw['latency_ms']} ms) in real-time.{RESET}\n")
+    else:
+        print(f"\n{GREEN}✓ Buffer size saved to {target} samples ({new_hw['latency_ms']} ms). Will apply when JACK starts.{RESET}\n")
 
 def cmd_list(args=None):
     models = get_models()
@@ -605,6 +698,10 @@ def main():
     p_chan.add_argument("direction", choices=["in", "out"], help="Direction: in or out")
     p_chan.add_argument("channel", help="For 'in': both, 1, 2. For 'out': stereo, 1, 2")
 
+    # buffer
+    p_buf = subparsers.add_parser("buffer", help="View or set audio buffer size (period frames)")
+    p_buf.add_argument("size", nargs="?", type=int, choices=[64, 128, 256, 512, 1024], help="Buffer size in samples (64, 128, 256, 512, 1024)")
+
     # cab
     p_cab = subparsers.add_parser("cab", help="Control Cab IR (on, off, auto, status)")
     p_cab.add_argument("action", nargs="?", default="status", choices=["on", "off", "bypass", "auto", "status"], help="Action: on, off, auto, or status")
@@ -650,6 +747,8 @@ def main():
         cmd_device(args)
     elif args.command == "channel":
         cmd_channel(args)
+    elif args.command == "buffer":
+        cmd_buffer(args)
     elif args.command == "cab":
         cmd_cab(args)
     elif args.command == "model":
