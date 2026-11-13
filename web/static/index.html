@@ -612,9 +612,67 @@
         <span class="badge bypassed">MUTED FOR SILENT TUNING</span>
       </div>
 
+      <!-- Tuning Preset Toolbar & String Target Pegs -->
+      <div class="tuner-tuning-bar">
+        <div class="tuner-preset-control-row">
+          <div class="tuner-select-wrapper">
+            <span class="tuner-section-label">TUNING:</span>
+            <select id="select-tuner-tuning" class="tuner-dropdown">
+              <optgroup label="Standard & Drop Tunings">
+                <option value="std_e" selected>Standard E (E A D G B E)</option>
+                <option value="drop_d">Drop D (D A D G B E)</option>
+                <option value="double_drop_d">Double Drop D (D A D G B D)</option>
+                <option value="half_step">Eb / D# Standard (Half-Step Down)</option>
+                <option value="drop_cs">Drop C# / Db (C# G# C# F# A# D#)</option>
+                <option value="full_step">D Standard (Full-Step Down)</option>
+                <option value="drop_c">Drop C (C G C F A D)</option>
+                <option value="c_std">C Standard (C F A# D# G C)</option>
+                <option value="drop_b">Drop B (B F# B E G# C#)</option>
+                <option value="b_std">B Standard (B E A D F# B)</option>
+                <option value="drop_a">Drop A (A E A D F# B)</option>
+              </optgroup>
+              <optgroup label="Open & Modal Tunings">
+                <option value="dadgad">DADGAD (D A D G A D)</option>
+                <option value="open_d">Open D (D A D F# A D)</option>
+                <option value="open_g">Open G (D G D G B D)</option>
+                <option value="open_c">Open C (C G C G C E)</option>
+                <option value="open_e">Open E (E B E G# B E)</option>
+                <option value="open_a">Open A (E A E A C# E)</option>
+              </optgroup>
+              <optgroup label="Extended Range & Bass">
+                <option value="seven_std">7-String Standard (B E A D G B E)</option>
+                <option value="seven_drop_a">7-String Drop A (A E A D G B E)</option>
+                <option value="bass_4_std">Bass 4-String Standard (E A D G)</option>
+                <option value="bass_4_drop_d">Bass 4-String Drop D (D A D G)</option>
+                <option value="bass_5_std">Bass 5-String Standard (B E A D G)</option>
+              </optgroup>
+              <optgroup label="Freeform">
+                <option value="chromatic">Chromatic (All 12 Semitones)</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="tuner-quick-pills" id="tuner-quick-pills">
+            <button type="button" class="tuner-pill active" data-tuning="std_e">STD E</button>
+            <button type="button" class="tuner-pill" data-tuning="drop_d">DROP D</button>
+            <button type="button" class="tuner-pill" data-tuning="half_step">Eb STD</button>
+            <button type="button" class="tuner-pill" data-tuning="drop_c">DROP C</button>
+            <button type="button" class="tuner-pill" data-tuning="dadgad">DADGAD</button>
+            <button type="button" class="tuner-pill" data-tuning="chromatic">CHROMATIC</button>
+          </div>
+        </div>
+
+        <!-- Target Strings Strip -->
+        <div class="tuner-strings-strip" id="tuner-strings-strip">
+          <!-- Dynamically populated string pegs -->
+        </div>
+      </div>
+
       <!-- Main Tuner Readout Screen -->
       <div class="tuner-display-box">
         <div class="tuner-screen-reflection"></div>
+        <div class="tuner-target-badge-wrap">
+          <span class="tuner-target-badge" id="tuner-target-badge">AUTO TRACKING</span>
+        </div>
         <div class="tuner-note-row">
           <span class="tuner-note-name" id="tuner-note">--</span>
           <span class="tuner-note-octave" id="tuner-octave"></span>

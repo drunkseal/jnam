@@ -128,6 +128,10 @@ const tunerFreq = document.getElementById('tuner-freq');
 const tunerNeedle = document.getElementById('tuner-needle');
 const tunerCents = document.getElementById('tuner-cents');
 const tunerStatusText = document.getElementById('tuner-status-text');
+const selectTunerTuning = document.getElementById('select-tuner-tuning');
+const tunerStringsStrip = document.getElementById('tuner-strings-strip');
+const tunerTargetBadge = document.getElementById('tuner-target-badge');
+const tunerQuickPills = document.querySelectorAll('.tuner-pill');
 
 // Fetch Status
 async function updateStatus() {
@@ -474,10 +478,401 @@ async function loadDevices() {
 }
 
 // ============================================================================
-// Real-Time Chromatic Tuner Logic (SSE Stream)
+// Real-Time Chromatic & Alternate Tuner Engine
 // ============================================================================
+
+const TUNINGS = {
+  // Standard & Drop Tunings
+  std_e: {
+    id: 'std_e',
+    name: 'Standard E',
+    desc: 'E · A · D · G · B · E',
+    strings: [
+      { num: 6, note: 'E', octave: 2, midi: 40 },
+      { num: 5, note: 'A', octave: 2, midi: 45 },
+      { num: 4, note: 'D', octave: 3, midi: 50 },
+      { num: 3, note: 'G', octave: 3, midi: 55 },
+      { num: 2, note: 'B', octave: 3, midi: 59 },
+      { num: 1, note: 'E', octave: 4, midi: 64 },
+    ]
+  },
+  drop_d: {
+    id: 'drop_d',
+    name: 'Drop D',
+    desc: 'D · A · D · G · B · E',
+    strings: [
+      { num: 6, note: 'D', octave: 2, midi: 38 },
+      { num: 5, note: 'A', octave: 2, midi: 45 },
+      { num: 4, note: 'D', octave: 3, midi: 50 },
+      { num: 3, note: 'G', octave: 3, midi: 55 },
+      { num: 2, note: 'B', octave: 3, midi: 59 },
+      { num: 1, note: 'E', octave: 4, midi: 64 },
+    ]
+  },
+  double_drop_d: {
+    id: 'double_drop_d',
+    name: 'Double Drop D',
+    desc: 'D · A · D · G · B · D',
+    strings: [
+      { num: 6, note: 'D', octave: 2, midi: 38 },
+      { num: 5, note: 'A', octave: 2, midi: 45 },
+      { num: 4, note: 'D', octave: 3, midi: 50 },
+      { num: 3, note: 'G', octave: 3, midi: 55 },
+      { num: 2, note: 'B', octave: 3, midi: 59 },
+      { num: 1, note: 'D', octave: 4, midi: 62 },
+    ]
+  },
+  half_step: {
+    id: 'half_step',
+    name: 'Eb / D# Standard',
+    desc: 'Eb · Ab · Db · Gb · Bb · Eb',
+    strings: [
+      { num: 6, note: 'D#', octave: 2, midi: 39 },
+      { num: 5, note: 'G#', octave: 2, midi: 44 },
+      { num: 4, note: 'C#', octave: 3, midi: 49 },
+      { num: 3, note: 'F#', octave: 3, midi: 54 },
+      { num: 2, note: 'A#', octave: 3, midi: 58 },
+      { num: 1, note: 'D#', octave: 4, midi: 63 },
+    ]
+  },
+  drop_cs: {
+    id: 'drop_cs',
+    name: 'Drop C# / Db',
+    desc: 'C# · G# · C# · F# · A# · D#',
+    strings: [
+      { num: 6, note: 'C#', octave: 2, midi: 37 },
+      { num: 5, note: 'G#', octave: 2, midi: 44 },
+      { num: 4, note: 'C#', octave: 3, midi: 49 },
+      { num: 3, note: 'F#', octave: 3, midi: 54 },
+      { num: 2, note: 'A#', octave: 3, midi: 58 },
+      { num: 1, note: 'D#', octave: 4, midi: 63 },
+    ]
+  },
+  full_step: {
+    id: 'full_step',
+    name: 'D Standard (Full Step Down)',
+    desc: 'D · G · C · F · A · D',
+    strings: [
+      { num: 6, note: 'D', octave: 2, midi: 38 },
+      { num: 5, note: 'G', octave: 2, midi: 43 },
+      { num: 4, note: 'C', octave: 3, midi: 48 },
+      { num: 3, note: 'F', octave: 3, midi: 53 },
+      { num: 2, note: 'A', octave: 3, midi: 57 },
+      { num: 1, note: 'D', octave: 4, midi: 62 },
+    ]
+  },
+  drop_c: {
+    id: 'drop_c',
+    name: 'Drop C',
+    desc: 'C · G · C · F · A · D',
+    strings: [
+      { num: 6, note: 'C', octave: 2, midi: 36 },
+      { num: 5, note: 'G', octave: 2, midi: 43 },
+      { num: 4, note: 'C', octave: 3, midi: 48 },
+      { num: 3, note: 'F', octave: 3, midi: 53 },
+      { num: 2, note: 'A', octave: 3, midi: 57 },
+      { num: 1, note: 'D', octave: 4, midi: 62 },
+    ]
+  },
+  c_std: {
+    id: 'c_std',
+    name: 'C Standard (Two Steps Down)',
+    desc: 'C · F · A# · D# · G · C',
+    strings: [
+      { num: 6, note: 'C', octave: 2, midi: 36 },
+      { num: 5, note: 'F', octave: 2, midi: 41 },
+      { num: 4, note: 'A#', octave: 2, midi: 46 },
+      { num: 3, note: 'D#', octave: 3, midi: 51 },
+      { num: 2, note: 'G', octave: 3, midi: 55 },
+      { num: 1, note: 'C', octave: 4, midi: 60 },
+    ]
+  },
+  drop_b: {
+    id: 'drop_b',
+    name: 'Drop B',
+    desc: 'B · F# · B · E · G# · C#',
+    strings: [
+      { num: 6, note: 'B', octave: 1, midi: 35 },
+      { num: 5, note: 'F#', octave: 2, midi: 42 },
+      { num: 4, note: 'B', octave: 2, midi: 47 },
+      { num: 3, note: 'E', octave: 3, midi: 52 },
+      { num: 2, note: 'G#', octave: 3, midi: 56 },
+      { num: 1, note: 'C#', octave: 4, midi: 61 },
+    ]
+  },
+  b_std: {
+    id: 'b_std',
+    name: 'B Standard (Baritone)',
+    desc: 'B · E · A · D · F# · B',
+    strings: [
+      { num: 6, note: 'B', octave: 1, midi: 35 },
+      { num: 5, note: 'E', octave: 2, midi: 40 },
+      { num: 4, note: 'A', octave: 2, midi: 45 },
+      { num: 3, note: 'D', octave: 3, midi: 50 },
+      { num: 2, note: 'F#', octave: 3, midi: 54 },
+      { num: 1, note: 'B', octave: 3, midi: 59 },
+    ]
+  },
+  drop_a: {
+    id: 'drop_a',
+    name: 'Drop A',
+    desc: 'A · E · A · D · F# · B',
+    strings: [
+      { num: 6, note: 'A', octave: 1, midi: 33 },
+      { num: 5, note: 'E', octave: 2, midi: 40 },
+      { num: 4, note: 'A', octave: 2, midi: 45 },
+      { num: 3, note: 'D', octave: 3, midi: 50 },
+      { num: 2, note: 'F#', octave: 3, midi: 54 },
+      { num: 1, note: 'B', octave: 3, midi: 59 },
+    ]
+  },
+
+  // Open & Modal Tunings
+  dadgad: {
+    id: 'dadgad',
+    name: 'DADGAD (Celtic / Kashmir)',
+    desc: 'D · A · D · G · A · D',
+    strings: [
+      { num: 6, note: 'D', octave: 2, midi: 38 },
+      { num: 5, note: 'A', octave: 2, midi: 45 },
+      { num: 4, note: 'D', octave: 3, midi: 50 },
+      { num: 3, note: 'G', octave: 3, midi: 55 },
+      { num: 2, note: 'A', octave: 3, midi: 57 },
+      { num: 1, note: 'D', octave: 4, midi: 62 },
+    ]
+  },
+  open_d: {
+    id: 'open_d',
+    name: 'Open D (Vestapol)',
+    desc: 'D · A · D · F# · A · D',
+    strings: [
+      { num: 6, note: 'D', octave: 2, midi: 38 },
+      { num: 5, note: 'A', octave: 2, midi: 45 },
+      { num: 4, note: 'D', octave: 3, midi: 50 },
+      { num: 3, note: 'F#', octave: 3, midi: 54 },
+      { num: 2, note: 'A', octave: 3, midi: 57 },
+      { num: 1, note: 'D', octave: 4, midi: 62 },
+    ]
+  },
+  open_g: {
+    id: 'open_g',
+    name: 'Open G (Stones / Blues)',
+    desc: 'D · G · D · G · B · D',
+    strings: [
+      { num: 6, note: 'D', octave: 2, midi: 38 },
+      { num: 5, note: 'G', octave: 2, midi: 43 },
+      { num: 4, note: 'D', octave: 3, midi: 50 },
+      { num: 3, note: 'G', octave: 3, midi: 55 },
+      { num: 2, note: 'B', octave: 3, midi: 59 },
+      { num: 1, note: 'D', octave: 4, midi: 62 },
+    ]
+  },
+  open_c: {
+    id: 'open_c',
+    name: 'Open C',
+    desc: 'C · G · C · G · C · E',
+    strings: [
+      { num: 6, note: 'C', octave: 2, midi: 36 },
+      { num: 5, note: 'G', octave: 2, midi: 43 },
+      { num: 4, note: 'C', octave: 3, midi: 48 },
+      { num: 3, note: 'G', octave: 3, midi: 55 },
+      { num: 2, note: 'C', octave: 4, midi: 60 },
+      { num: 1, note: 'E', octave: 4, midi: 64 },
+    ]
+  },
+  open_e: {
+    id: 'open_e',
+    name: 'Open E (Slide)',
+    desc: 'E · B · E · G# · B · E',
+    strings: [
+      { num: 6, note: 'E', octave: 2, midi: 40 },
+      { num: 5, note: 'B', octave: 2, midi: 47 },
+      { num: 4, note: 'E', octave: 3, midi: 52 },
+      { num: 3, note: 'G#', octave: 3, midi: 56 },
+      { num: 2, note: 'B', octave: 3, midi: 59 },
+      { num: 1, note: 'E', octave: 4, midi: 64 },
+    ]
+  },
+  open_a: {
+    id: 'open_a',
+    name: 'Open A',
+    desc: 'E · A · E · A · C# · E',
+    strings: [
+      { num: 6, note: 'E', octave: 2, midi: 40 },
+      { num: 5, note: 'A', octave: 2, midi: 45 },
+      { num: 4, note: 'E', octave: 3, midi: 52 },
+      { num: 3, note: 'A', octave: 3, midi: 57 },
+      { num: 2, note: 'C#', octave: 4, midi: 61 },
+      { num: 1, note: 'E', octave: 4, midi: 64 },
+    ]
+  },
+
+  // Extended Range (7-String & Bass)
+  seven_std: {
+    id: 'seven_std',
+    name: '7-String Standard',
+    desc: 'B · E · A · D · G · B · E',
+    strings: [
+      { num: 7, note: 'B', octave: 1, midi: 35 },
+      { num: 6, note: 'E', octave: 2, midi: 40 },
+      { num: 5, note: 'A', octave: 2, midi: 45 },
+      { num: 4, note: 'D', octave: 3, midi: 50 },
+      { num: 3, note: 'G', octave: 3, midi: 55 },
+      { num: 2, note: 'B', octave: 3, midi: 59 },
+      { num: 1, note: 'E', octave: 4, midi: 64 },
+    ]
+  },
+  seven_drop_a: {
+    id: 'seven_drop_a',
+    name: '7-String Drop A',
+    desc: 'A · E · A · D · G · B · E',
+    strings: [
+      { num: 7, note: 'A', octave: 1, midi: 33 },
+      { num: 6, note: 'E', octave: 2, midi: 40 },
+      { num: 5, note: 'A', octave: 2, midi: 45 },
+      { num: 4, note: 'D', octave: 3, midi: 50 },
+      { num: 3, note: 'G', octave: 3, midi: 55 },
+      { num: 2, note: 'B', octave: 3, midi: 59 },
+      { num: 1, note: 'E', octave: 4, midi: 64 },
+    ]
+  },
+  bass_4_std: {
+    id: 'bass_4_std',
+    name: 'Bass 4-String Standard',
+    desc: 'E · A · D · G',
+    strings: [
+      { num: 4, note: 'E', octave: 1, midi: 28 },
+      { num: 3, note: 'A', octave: 1, midi: 33 },
+      { num: 2, note: 'D', octave: 2, midi: 38 },
+      { num: 1, note: 'G', octave: 2, midi: 43 },
+    ]
+  },
+  bass_4_drop_d: {
+    id: 'bass_4_drop_d',
+    name: 'Bass 4-String Drop D',
+    desc: 'D · A · D · G',
+    strings: [
+      { num: 4, note: 'D', octave: 1, midi: 26 },
+      { num: 3, note: 'A', octave: 1, midi: 33 },
+      { num: 2, note: 'D', octave: 2, midi: 38 },
+      { num: 1, note: 'G', octave: 2, midi: 43 },
+    ]
+  },
+  bass_5_std: {
+    id: 'bass_5_std',
+    name: 'Bass 5-String Standard',
+    desc: 'B · E · A · D · G',
+    strings: [
+      { num: 5, note: 'B', octave: 0, midi: 23 },
+      { num: 4, note: 'E', octave: 1, midi: 28 },
+      { num: 3, note: 'A', octave: 1, midi: 33 },
+      { num: 2, note: 'D', octave: 2, midi: 38 },
+      { num: 1, note: 'G', octave: 2, midi: 43 },
+    ]
+  },
+
+  // Freeform Chromatic
+  chromatic: {
+    id: 'chromatic',
+    name: 'Chromatic (All 12 Semitones)',
+    desc: 'Any Note Detection',
+    strings: []
+  }
+};
+
+// Compute calibrated frequencies for all strings (A4 = 440 Hz)
+Object.values(TUNINGS).forEach(t => {
+  if (t.strings) {
+    t.strings.forEach(s => {
+      s.freq = 440.0 * Math.pow(2.0, (s.midi - 69) / 12.0);
+    });
+  }
+});
+
+let currentTuningKey = localStorage.getItem('jnam_tuner_tuning') || 'std_e';
+if (!TUNINGS[currentTuningKey]) currentTuningKey = 'std_e';
+let lockedStringIdx = null; // null = Auto String Tracking; number = user-selected string peg
+
+function setTuning(tuningKey) {
+  if (!TUNINGS[tuningKey]) return;
+  currentTuningKey = tuningKey;
+  lockedStringIdx = null;
+  try {
+    localStorage.setItem('jnam_tuner_tuning', tuningKey);
+  } catch (e) {}
+
+  if (selectTunerTuning) {
+    selectTunerTuning.value = tuningKey;
+  }
+  if (tunerQuickPills) {
+    tunerQuickPills.forEach(pill => {
+      pill.classList.toggle('active', pill.dataset.tuning === tuningKey);
+    });
+  }
+  renderStringPegs();
+  resetTunerDisplay();
+}
+
+function renderStringPegs() {
+  if (!tunerStringsStrip) return;
+  tunerStringsStrip.innerHTML = '';
+
+  const tuning = TUNINGS[currentTuningKey];
+  if (!tuning || !tuning.strings || tuning.strings.length === 0) {
+    // Chromatic mode
+    const banner = document.createElement('div');
+    banner.className = 'tuner-chromatic-banner';
+    banner.textContent = 'AUTO CHROMATIC • 12-TET FULL SEMITONE TRACKING';
+    tunerStringsStrip.appendChild(banner);
+    if (tunerTargetBadge) {
+      tunerTargetBadge.textContent = 'CHROMATIC MODE';
+      tunerTargetBadge.className = 'tuner-target-badge';
+    }
+    return;
+  }
+
+  tuning.strings.forEach((s, idx) => {
+    const peg = document.createElement('div');
+    peg.className = 'tuner-string-peg';
+    peg.dataset.strIdx = idx;
+    if (lockedStringIdx === idx) {
+      peg.classList.add('locked');
+    }
+
+    peg.innerHTML = `
+      <span class="peg-num">STR ${s.num}</span>
+      <span class="peg-note">${s.note}${s.octave}</span>
+      <span class="peg-freq">${s.freq.toFixed(1)} Hz</span>
+    `;
+
+    peg.addEventListener('click', () => {
+      if (lockedStringIdx === idx) {
+        lockedStringIdx = null;
+      } else {
+        lockedStringIdx = idx;
+      }
+      renderStringPegs();
+      resetTunerDisplay();
+    });
+
+    tunerStringsStrip.appendChild(peg);
+  });
+
+  if (tunerTargetBadge) {
+    if (lockedStringIdx !== null) {
+      const lockedStr = tuning.strings[lockedStringIdx];
+      tunerTargetBadge.textContent = `LOCKED: STR ${lockedStr.num} (${lockedStr.note}${lockedStr.octave})`;
+      tunerTargetBadge.className = 'tuner-target-badge locked';
+    } else {
+      tunerTargetBadge.textContent = `AUTO: ${tuning.name}`;
+      tunerTargetBadge.className = 'tuner-target-badge';
+    }
+  }
+}
+
 function openTuner() {
   tunerOverlay.classList.remove('hidden');
+  renderStringPegs();
   resetTunerDisplay();
 
   if (tunerEventSource) {
@@ -524,19 +919,58 @@ function resetTunerDisplay() {
   tunerCents.textContent = '0.0 Cents';
   tunerStatusText.textContent = 'LISTENING FOR GUITAR...';
   tunerStatusText.className = 'tuner-status-text';
+
+  const tuning = TUNINGS[currentTuningKey];
+  if (tunerTargetBadge) {
+    if (!tuning || !tuning.strings || tuning.strings.length === 0) {
+      tunerTargetBadge.textContent = 'CHROMATIC MODE';
+      tunerTargetBadge.className = 'tuner-target-badge';
+    } else if (lockedStringIdx !== null && tuning.strings[lockedStringIdx]) {
+      const lockedStr = tuning.strings[lockedStringIdx];
+      tunerTargetBadge.textContent = `LOCKED: STR ${lockedStr.num} (${lockedStr.note}${lockedStr.octave})`;
+      tunerTargetBadge.className = 'tuner-target-badge locked';
+    } else {
+      tunerTargetBadge.textContent = `AUTO: ${tuning.name}`;
+      tunerTargetBadge.className = 'tuner-target-badge';
+    }
+  }
+
+  document.querySelectorAll('.tuner-string-peg').forEach(peg => {
+    peg.classList.remove('active', 'in-tune');
+  });
 }
 
 function renderTunerData(data) {
-  if (data.active) {
+  if (!data.active || !data.freq || data.freq <= 0) {
+    // String stopped or silence
+    tunerNote.className = 'tuner-note-name';
+    tunerNeedle.className = 'tuner-meter-needle';
+    tunerStatusText.className = 'tuner-status-text';
+    tunerStatusText.textContent = 'LISTENING FOR GUITAR...';
+    if (tunerNote.textContent === '--') {
+      tunerFreq.textContent = 'Pluck a string...';
+    }
+    document.querySelectorAll('.tuner-string-peg').forEach(peg => {
+      peg.classList.remove('active', 'in-tune');
+    });
+    return;
+  }
+
+  const f = data.freq;
+  tunerFreq.textContent = `${f.toFixed(2)} Hz`;
+
+  const tuning = TUNINGS[currentTuningKey];
+  const isChromatic = !tuning || !tuning.strings || tuning.strings.length === 0;
+
+  if (isChromatic) {
+    // Pure Chromatic Tracking
     tunerNote.textContent = data.note;
     tunerOctave.textContent = data.octave !== undefined ? data.octave : '';
-    tunerFreq.textContent = `${data.freq.toFixed(2)} Hz`;
 
     const cents = data.cents;
     const sign = cents > 0 ? '+' : '';
     tunerCents.textContent = `${sign}${cents.toFixed(1)} Cents`;
 
-    // Map -50..+50 cents to 4%..96% needle position
     const clampedCents = Math.max(-50, Math.min(50, cents));
     const needlePct = 50 + (clampedCents / 50) * 44;
     tunerNeedle.style.left = `${needlePct.toFixed(1)}%`;
@@ -556,21 +990,93 @@ function renderTunerData(data) {
       }
       tunerStatusText.className = 'tuner-status-text';
     }
+    return;
+  }
+
+  // Preset Mode (Alternate / Standard Tunings)
+  let targetString = null;
+  let targetIdx = -1;
+
+  if (lockedStringIdx !== null && tuning.strings[lockedStringIdx]) {
+    targetIdx = lockedStringIdx;
+    targetString = tuning.strings[lockedStringIdx];
   } else {
-    // String stopped or silence
-    tunerNote.className = 'tuner-note-name';
-    tunerNeedle.className = 'tuner-meter-needle';
-    tunerStatusText.className = 'tuner-status-text';
-    tunerStatusText.textContent = 'LISTENING FOR GUITAR...';
-    if (tunerNote.textContent === '--') {
-      tunerFreq.textContent = 'Pluck a string...';
+    // Auto String Identification: find string with closest pitch
+    let minDiff = Infinity;
+    tuning.strings.forEach((s, idx) => {
+      const diff = Math.abs(12 * Math.log2(f / s.freq));
+      if (diff < minDiff) {
+        minDiff = diff;
+        targetString = s;
+        targetIdx = idx;
+      }
+    });
+  }
+
+  if (targetString) {
+    // Exact cents deviation relative to target string note frequency
+    const cents = 1200 * Math.log2(f / targetString.freq);
+    const inTune = Math.abs(cents) <= 3.0;
+
+    // Display target note name
+    tunerNote.textContent = targetString.note;
+    tunerOctave.textContent = targetString.octave;
+
+    const sign = cents > 0 ? '+' : '';
+    tunerCents.textContent = `${sign}${cents.toFixed(1)} Cents`;
+
+    const clampedCents = Math.max(-50, Math.min(50, cents));
+    const needlePct = 50 + (clampedCents / 50) * 44;
+    tunerNeedle.style.left = `${needlePct.toFixed(1)}%`;
+
+    // Highlight target string peg
+    const pegs = document.querySelectorAll('.tuner-string-peg');
+    pegs.forEach((peg, idx) => {
+      peg.classList.toggle('active', idx === targetIdx);
+      peg.classList.toggle('in-tune', idx === targetIdx && inTune);
+    });
+
+    if (tunerTargetBadge) {
+      const modeTag = lockedStringIdx !== null ? 'LOCKED' : 'TARGET';
+      tunerTargetBadge.textContent = `${modeTag}: STR ${targetString.num} • ${targetString.note}${targetString.octave} (${targetString.freq.toFixed(1)} Hz)`;
+      tunerTargetBadge.className = lockedStringIdx !== null ? 'tuner-target-badge locked' : 'tuner-target-badge';
+    }
+
+    if (inTune) {
+      tunerNote.className = 'tuner-note-name in-tune';
+      tunerNeedle.className = 'tuner-meter-needle in-tune';
+      tunerStatusText.textContent = `● STRING ${targetString.num} IN TUNE (${targetString.note}${targetString.octave}) ●`;
+      tunerStatusText.className = 'tuner-status-text in-tune';
+    } else {
+      tunerNote.className = 'tuner-note-name';
+      tunerNeedle.className = 'tuner-meter-needle';
+      if (cents < -3.0) {
+        tunerStatusText.textContent = `◄ TUNE UP STRING ${targetString.num} (${targetString.note}${targetString.octave} · ${Math.abs(cents).toFixed(1)}c flat)`;
+      } else {
+        tunerStatusText.textContent = `► TUNE DOWN STRING ${targetString.num} (${targetString.note}${targetString.octave} · +${cents.toFixed(1)}c sharp)`;
+      }
+      tunerStatusText.className = 'tuner-status-text';
     }
   }
 }
 
 // Event Listeners
-btnTunerOpen.addEventListener('click', openTuner);
-btnTunerClose.addEventListener('click', closeTuner);
+if (btnTunerOpen) btnTunerOpen.addEventListener('click', openTuner);
+if (btnTunerClose) btnTunerClose.addEventListener('click', closeTuner);
+
+if (selectTunerTuning) {
+  selectTunerTuning.addEventListener('change', (e) => {
+    setTuning(e.target.value);
+  });
+}
+
+if (tunerQuickPills) {
+  tunerQuickPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      setTuning(pill.dataset.tuning);
+    });
+  });
+}
 
 selectModel.addEventListener('change', async (e) => {
   displayModelName.textContent = 'Switching model...';
@@ -983,6 +1489,7 @@ loadModels();
 loadIrs();
 loadDevices();
 initRotaryKnobs();
+setTuning(currentTuningKey);
 updateStatus();
 setInterval(updateStatus, 4000);
 
