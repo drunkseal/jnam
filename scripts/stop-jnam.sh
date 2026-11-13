@@ -8,5 +8,5 @@ for i in {1..10}; do
     sleep 0.1
 done
 killall -9 aj-snapshot jconvolver jalv 2>/dev/null || true
-rm -f /tmp/nam_control.fifo
+rm -f /tmp/nam_*.fifo
 echo "[jnam] Stopped."

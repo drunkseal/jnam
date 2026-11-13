@@ -199,7 +199,9 @@ for i in $(seq 1 50); do
        echo "$PORTS" | grep -q "drive:in" && \
        echo "$PORTS" | grep -q "delay:in" && \
        echo "$PORTS" | grep -q "reverb:in"; then
-        break
+        if [ "$CAB_ENABLED" -eq 0 ] || echo "$PORTS" | grep -q "cab:in"; then
+            break
+        fi
     fi
     sleep 0.1
 done
