@@ -92,17 +92,32 @@ fi
 cat << XML > "$NAM_DIR/connections.xml"
 <?xml version="1.0" encoding="utf-8"?>
 <aj-snapshot>
-  <jack>
-    <connections>
-$( [ "$IN_CHAN" = "both" ] || [ "$IN_CHAN" = "1" ] && echo '      <port id="system:capture_1"><connection port="nam:input" /></port>' )
-$( [ "$IN_CHAN" = "both" ] || [ "$IN_CHAN" = "2" ] && echo '      <port id="system:capture_2"><connection port="nam:input" /></port>' )
-$( [ "$CAB_ENABLED" -eq 1 ] && echo '      <port id="nam:output"><connection port="cab:in" /></port>' )
-      <port id="$( [ "$CAB_ENABLED" -eq 1 ] && echo "cab:out" || echo "nam:output" )">
-$( [ "$OUT_CHAN" = "stereo" ] || [ "$OUT_CHAN" = "1" ] && echo '        <connection port="system:playback_1" />' )
-$( [ "$OUT_CHAN" = "stereo" ] || [ "$OUT_CHAN" = "2" ] && echo '        <connection port="system:playback_2" />' )
-      </port>
-    </connections>
-  </jack>
+<jack>
+  <client name="system">
+$( [ "$IN_CHAN" = "both" ] || [ "$IN_CHAN" = "1" ] && echo '    <port name="capture_1"><connection port="nam:input" /></port>' )
+$( [ "$IN_CHAN" = "both" ] || [ "$IN_CHAN" = "2" ] && echo '    <port name="capture_2"><connection port="nam:input" /></port>' )
+  </client>
+$( if [ "$CAB_ENABLED" -eq 1 ]; then cat << NAM_CAB
+  <client name="nam">
+    <port name="output"><connection port="cab:in" /></port>
+  </client>
+  <client name="cab">
+    <port name="out">
+$( [ "$OUT_CHAN" = "stereo" ] || [ "$OUT_CHAN" = "1" ] && echo '      <connection port="system:playback_1" />' )
+$( [ "$OUT_CHAN" = "stereo" ] || [ "$OUT_CHAN" = "2" ] && echo '      <connection port="system:playback_2" />' )
+    </port>
+  </client>
+NAM_CAB
+else cat << NAM_DIR
+  <client name="nam">
+    <port name="output">
+$( [ "$OUT_CHAN" = "stereo" ] || [ "$OUT_CHAN" = "1" ] && echo '      <connection port="system:playback_1" />' )
+$( [ "$OUT_CHAN" = "stereo" ] || [ "$OUT_CHAN" = "2" ] && echo '      <connection port="system:playback_2" />' )
+    </port>
+  </client>
+NAM_DIR
+fi )
+</jack>
 </aj-snapshot>
 XML
 
@@ -152,7 +167,13 @@ if [ "$CAB_ENABLED" -eq 1 ]; then
     PIDS_TO_WATCH+=($CAB_PID)
 fi
 
-sleep 1.0
+# Wait up to 5 seconds for jalv to register its ports in JACK
+for i in $(seq 1 50); do
+    if jack_lsp 2>/dev/null | grep -q "nam:input"; then
+        break
+    fi
+    sleep 0.1
+done
 
 # 8. Start connection keeper daemon (aj-snapshot)
 echo "[jnam] Starting connection manager (aj-snapshot)..."

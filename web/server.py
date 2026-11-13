@@ -246,37 +246,38 @@ def generate_connections_xml(in_chan=None, out_chan=None, cab_enabled=None):
     lines = [
         '<?xml version="1.0" encoding="utf-8"?>',
         '<aj-snapshot>',
-        '  <jack>',
-        '    <connections>'
+        '<jack>',
+        '  <client name="system">'
     ]
 
     # Input routing
     if in_chan in ["both", "1"]:
-        lines.append('      <port id="system:capture_1"><connection port="nam:input" /></port>')
+        lines.append('    <port name="capture_1">\n      <connection port="nam:input" />\n    </port>')
     if in_chan in ["both", "2"]:
-        lines.append('      <port id="system:capture_2"><connection port="nam:input" /></port>')
+        lines.append('    <port name="capture_2">\n      <connection port="nam:input" />\n    </port>')
+    lines.append('  </client>')
 
-    # Output routing
+    # Signal chain routing
     if cab_enabled:
-        lines.append('      <port id="nam:output"><connection port="cab:in" /></port>')
-        out_port = "cab:out"
+        lines.append('  <client name="nam">\n    <port name="output">\n      <connection port="cab:in" />\n    </port>\n  </client>')
+        out_client = "cab"
+        out_port_name = "out"
     else:
-        out_port = "nam:output"
+        out_client = "nam"
+        out_port_name = "output"
 
-    out_connections = []
+    out_conns = []
     if out_chan in ["stereo", "1"]:
-        out_connections.append('<connection port="system:playback_1" />')
+        out_conns.append('      <connection port="system:playback_1" />')
     if out_chan in ["stereo", "2"]:
-        out_connections.append('<connection port="system:playback_2" />')
+        out_conns.append('      <connection port="system:playback_2" />')
 
-    if out_connections:
-        lines.append(f'      <port id="{out_port}">')
-        for conn in out_connections:
-            lines.append(f'        {conn}')
-        lines.append('      </port>')
+    if out_conns:
+        lines.append(f'  <client name="{out_client}">\n    <port name="{out_port_name}">')
+        lines.extend(out_conns)
+        lines.append('    </port>\n  </client>')
 
-    lines.append('    </connections>')
-    lines.append('  </jack>')
+    lines.append('</jack>')
     lines.append('</aj-snapshot>')
 
     content = "\n".join(lines) + "\n"
