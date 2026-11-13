@@ -544,6 +544,24 @@ def cmd_quality(args):
     else:
         print(f"{YELLOW}Warning: Rig not running or FIFO busy. Could not set live quality.{RESET}")
 
+def cmd_test(args):
+    print(f"\n{BOLD}{CYAN}Playing stereo headphone test tone...{RESET}")
+    print(f"  {DIM}1. Left Ear  - 440.00 Hz (A4){RESET}")
+    print(f"  {DIM}2. Right Ear - 554.37 Hz (C#5){RESET}")
+    print(f"  {DIM}3. Stereo    - A-Major Harmony{RESET}\n")
+
+    bin_paths = [
+        "/usr/local/bin/jnam-tone",
+        "/opt/jnam/bin/jnam-tone",
+        os.path.join(os.path.dirname(os.path.realpath(__file__)), "jnam-tone")
+    ]
+    tone_bin = next((p for p in bin_paths if os.path.exists(p) and os.access(p, os.X_OK)), None)
+    if tone_bin:
+        subprocess.call([tone_bin])
+        print(f"{GREEN}✓ Headphone test complete.{RESET}\n")
+    else:
+        print(f"{RED}Error: jnam-tone binary not found. Build it with 'make'.{RESET}\n")
+
 def cmd_web(args):
     port = args.port or 8080
     host = args.host or "0.0.0.0"
@@ -613,6 +631,9 @@ def main():
     p_web.add_argument("--port", type=int, default=8080, help="Port to listen on (default: 8080)")
     p_web.add_argument("--host", default="0.0.0.0", help="Host interface (default: 0.0.0.0)")
 
+    # test
+    subparsers.add_parser("test", help="Play stereo headphone test tone to verify audio output")
+
     # start / stop / restart / logs
     subparsers.add_parser("start", help="Start JNAM rig service")
     subparsers.add_parser("stop", help="Stop JNAM rig service")
@@ -641,6 +662,8 @@ def main():
         cmd_quality(args)
     elif args.command == "web":
         cmd_web(args)
+    elif args.command == "test":
+        cmd_test(args)
     elif args.command in ["start", "stop", "restart"]:
         cmd_service(args.command)
     elif args.command == "logs":

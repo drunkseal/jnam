@@ -107,7 +107,7 @@ cp -r "${SCRIPT_DIR}/systemd" "${INSTALL_DIR}/"
 [ -d "${SCRIPT_DIR}/src" ] && cp -r "${SCRIPT_DIR}/src" "${INSTALL_DIR}/"
 [ -f "${SCRIPT_DIR}/Makefile" ] && cp "${SCRIPT_DIR}/Makefile" "${INSTALL_DIR}/"
 
-# Build tuner if source is present
+# Build tuner and tone generator if source is present
 if [ -f "${INSTALL_DIR}/src/tuner.c" ]; then
     echo -e "Compiling real-time tuner..."
     gcc -O2 "${INSTALL_DIR}/src/tuner.c" -o "${INSTALL_DIR}/bin/jnam-tuner" -ljack -lm || {
@@ -115,8 +115,16 @@ if [ -f "${INSTALL_DIR}/src/tuner.c" ]; then
     }
 fi
 
+if [ -f "${INSTALL_DIR}/src/tone.c" ]; then
+    echo -e "Compiling headphone test tone utility..."
+    gcc -O2 "${INSTALL_DIR}/src/tone.c" -o "${INSTALL_DIR}/bin/jnam-tone" -ljack -lm || {
+        echo -e "${YELLOW}Warning: Failed to compile test tone binary. Continuing...${RESET}"
+    }
+fi
+
 chmod +x "${INSTALL_DIR}/bin/jnam"
 [ -f "${INSTALL_DIR}/bin/jnam-tuner" ] && chmod +x "${INSTALL_DIR}/bin/jnam-tuner"
+[ -f "${INSTALL_DIR}/bin/jnam-tone" ] && chmod +x "${INSTALL_DIR}/bin/jnam-tone"
 chmod +x "${INSTALL_DIR}/scripts/"*.sh
 chmod +x "${INSTALL_DIR}/web/server.py"
 
@@ -124,6 +132,9 @@ chmod +x "${INSTALL_DIR}/web/server.py"
 ln -sf "${INSTALL_DIR}/bin/jnam" /usr/local/bin/jnam
 if [ -f "${INSTALL_DIR}/bin/jnam-tuner" ]; then
     ln -sf "${INSTALL_DIR}/bin/jnam-tuner" /usr/local/bin/jnam-tuner
+fi
+if [ -f "${INSTALL_DIR}/bin/jnam-tone" ]; then
+    ln -sf "${INSTALL_DIR}/bin/jnam-tone" /usr/local/bin/jnam-tone
 fi
 
 # ------------------------------------------------------------------------------
