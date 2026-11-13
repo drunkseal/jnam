@@ -81,6 +81,17 @@ EOF
 
 echo -e "${GREEN}Audio group & RT limits configured (RTPRIO=95, memlock=unlimited).${RESET}"
 
+# Configure persistent CPU performance governor
+if [ -f /etc/default/cpufrequtils ]; then
+    sed -i 's/^GOVERNOR=.*/GOVERNOR=performance/' /etc/default/cpufrequtils
+    systemctl restart cpufrequtils 2>/dev/null || true
+fi
+
+for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+    [ -f "$g" ] && echo performance > "$g" 2>/dev/null || true
+done
+echo -e "${GREEN}CPU scaling governor configured to performance.${RESET}"
+
 # ------------------------------------------------------------------------------
 # 3. Deploy JNAM Files to /opt/jnam
 # ------------------------------------------------------------------------------
