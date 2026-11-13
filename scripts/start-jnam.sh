@@ -121,16 +121,27 @@ fi )
 </aj-snapshot>
 XML
 
-# Prepare FIFO for live parameter control
-rm -f "$FIFO"
-mkfifo "$FIFO"
-sleep infinity > "$FIFO" &
-FIFO_KEEP_PID=$!
+# Prepare FIFOs for live parameter control (NAM + Pedalboard FX)
+NAM_FIFO="/tmp/nam_control.fifo"
+DRIVE_FIFO="/tmp/nam_drive.fifo"
+DELAY_FIFO="/tmp/nam_delay.fifo"
+REVERB_FIFO="/tmp/nam_reverb.fifo"
+
+rm -f "$NAM_FIFO" "$DRIVE_FIFO" "$DELAY_FIFO" "$REVERB_FIFO"
+mkfifo "$NAM_FIFO" "$DRIVE_FIFO" "$DELAY_FIFO" "$REVERB_FIFO"
+sleep infinity > "$NAM_FIFO" &
+NAM_FKEEP=$!
+sleep infinity > "$DRIVE_FIFO" &
+DRIVE_FKEEP=$!
+sleep infinity > "$DELAY_FIFO" &
+DELAY_FKEEP=$!
+sleep infinity > "$REVERB_FIFO" &
+REVERB_FKEEP=$!
 
 cleanup() {
-    echo "[jnam] Stopping rig components..."
-    kill $JALV_PID $CAB_PID $SNAP_PID $FIFO_KEEP_PID 2>/dev/null || true
-    rm -f "$FIFO"
+    echo "[jnam] Stopping rig and pedalboard components..."
+    kill $JALV_PID $CAB_PID $DRIVE_PID $DELAY_PID $REVERB_PID $SNAP_PID $NAM_FKEEP $DRIVE_FKEEP $DELAY_FKEEP $REVERB_FKEEP 2>/dev/null || true
+    rm -f "$NAM_FIFO" "$DRIVE_FIFO" "$DELAY_FIFO" "$REVERB_FIFO"
 }
 
 TERMINATED=0
@@ -144,7 +155,7 @@ trap cleanup EXIT
 
 # CPU Core Pinning for Real-Time Isolation
 # Core 3: 100% Dedicated to Neural Amp Modeler (WaveNet DSP)
-# Core 2: Dedicated to Cab IR (jconvolver), JACK Driver, and Connection Daemon
+# Core 2: Dedicated to Cab IR (jconvolver), Pedalboard FX, and JACK Driver
 NUM_CPUS=$(nproc || echo 1)
 NAM_AFFINITY=""
 CAB_AFFINITY=""
@@ -153,13 +164,13 @@ if [ "$NUM_CPUS" -ge 4 ]; then
     CAB_AFFINITY="taskset -c 2"
 fi
 
-# 6. Start NAM plugin host (jalv)
+# 6. Start NAM plugin host (jalv) on Core 3
 echo "[jnam] Starting Neural Amp Modeler (jalv) on dedicated core..."
-$NAM_AFFINITY jalv -n nam http://github.com/mikeoliphant/neural-amp-modeler-lv2 < "$FIFO" &
+$NAM_AFFINITY jalv -n nam http://github.com/mikeoliphant/neural-amp-modeler-lv2 < "$NAM_FIFO" &
 JALV_PID=$!
 PIDS_TO_WATCH+=($JALV_PID)
 
-# 7. Start Cab IR convolution engine (if enabled)
+# 7. Start Cab IR convolution engine (if enabled) on Core 2
 if [ "$CAB_ENABLED" -eq 1 ]; then
     echo "[jnam] Starting Cab IR engine (jconvolver)..."
     $CAB_AFFINITY jconvolver -N cab "$NAM_DIR/cab.conf" &
@@ -167,42 +178,49 @@ if [ "$CAB_ENABLED" -eq 1 ]; then
     PIDS_TO_WATCH+=($CAB_PID)
 fi
 
-# Wait up to 5 seconds for jalv to register its ports in JACK
+# 8. Start Pedalboard FX on Core 2
+echo "[jnam] Starting Pedalboard FX (Drive, Delay, Reverb)..."
+$CAB_AFFINITY jalv -n drive http://guitarix.sourceforge.net/plugins/gxts9#ts9sim < "$DRIVE_FIFO" &
+DRIVE_PID=$!
+PIDS_TO_WATCH+=($DRIVE_PID)
+
+$CAB_AFFINITY jalv -n delay http://guitarix.sourceforge.net/plugins/gx_delay_stereo#_delay_stereo < "$DELAY_FIFO" &
+DELAY_PID=$!
+PIDS_TO_WATCH+=($DELAY_PID)
+
+$CAB_AFFINITY jalv -n reverb http://guitarix.sourceforge.net/plugins/gx_reverb_stereo#_reverb_stereo < "$REVERB_FIFO" &
+REVERB_PID=$!
+PIDS_TO_WATCH+=($REVERB_PID)
+
+# Wait up to 5 seconds for all plugin ports to register in JACK
 for i in $(seq 1 50); do
-    if jack_lsp 2>/dev/null | grep -q "nam:input"; then
+    PORTS=$(jack_lsp 2>/dev/null || true)
+    if echo "$PORTS" | grep -q "nam:input" && \
+       echo "$PORTS" | grep -q "drive:in" && \
+       echo "$PORTS" | grep -q "delay:in" && \
+       echo "$PORTS" | grep -q "reverb:in"; then
         break
     fi
     sleep 0.1
 done
 
-# 8. Start connection keeper daemon (aj-snapshot)
+# 9. Establish clean signal chain connections
+python3 -c "
+import sys, os
+sys.path.insert(0, '$NAM_DIR/web')
+try:
+    import server
+    server.apply_jack_routing_live()
+except Exception as e:
+    pass
+" 2>/dev/null || true
+
+# 10. Start connection keeper daemon (aj-snapshot)
 echo "[jnam] Starting connection manager (aj-snapshot)..."
 $CAB_AFFINITY aj-snapshot -d -j -q "$NAM_DIR/connections.xml" &
 SNAP_PID=$!
 
-# Initial connect attempt
-if [ "$IN_CHAN" = "both" ] || [ "$IN_CHAN" = "1" ]; then
-    jack_connect system:capture_1 nam:input 2>/dev/null || true
-fi
-if [ "$IN_CHAN" = "both" ] || [ "$IN_CHAN" = "2" ]; then
-    jack_connect system:capture_2 nam:input 2>/dev/null || true
-fi
-
-if [ "$CAB_ENABLED" -eq 1 ]; then
-    jack_connect nam:output cab:in 2>/dev/null || true
-    OUT_SRC="cab:out"
-else
-    OUT_SRC="nam:output"
-fi
-
-if [ "$OUT_CHAN" = "stereo" ] || [ "$OUT_CHAN" = "1" ]; then
-    jack_connect "$OUT_SRC" system:playback_1 2>/dev/null || true
-fi
-if [ "$OUT_CHAN" = "stereo" ] || [ "$OUT_CHAN" = "2" ]; then
-    jack_connect "$OUT_SRC" system:playback_2 2>/dev/null || true
-fi
-
-echo "[jnam] JNAM Rig running successfully on JACK2!"
+echo "[jnam] JNAM Rig & Pedalboard running successfully on JACK2!"
 
 # Wait on critical processes
 wait -n "${PIDS_TO_WATCH[@]}"

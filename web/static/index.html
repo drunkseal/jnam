@@ -82,7 +82,23 @@
           </div>
         </div>
 
-        <div class="chain-wire active">
+        <div class="chain-wire" id="wire-drive">
+          <div class="wire-pulse"></div>
+        </div>
+
+        <div class="chain-node" id="node-drive">
+          <div class="node-icon-wrap">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+          </div>
+          <div class="node-content">
+            <span class="node-label">PRE-DRIVE</span>
+            <span class="node-sub" id="chain-drive-state">BYPASS</span>
+          </div>
+        </div>
+
+        <div class="chain-wire active" id="wire-nam">
           <div class="wire-pulse"></div>
         </div>
 
@@ -117,7 +133,40 @@
           </div>
         </div>
 
-        <div class="chain-wire active">
+        <div class="chain-wire" id="wire-delay">
+          <div class="wire-pulse"></div>
+        </div>
+
+        <div class="chain-node" id="node-delay">
+          <div class="node-icon-wrap">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="12" cy="12" r="9"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <div class="node-content">
+            <span class="node-label">DELAY</span>
+            <span class="node-sub" id="chain-delay-state">BYPASS</span>
+          </div>
+        </div>
+
+        <div class="chain-wire" id="wire-reverb">
+          <div class="wire-pulse"></div>
+        </div>
+
+        <div class="chain-node" id="node-reverb">
+          <div class="node-icon-wrap">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M2 12h20M2 12a10 10 0 0 1 20 0M5 12a7 7 0 0 1 14 0"/>
+            </svg>
+          </div>
+          <div class="node-content">
+            <span class="node-label">REVERB</span>
+            <span class="node-sub" id="chain-reverb-state">BYPASS</span>
+          </div>
+        </div>
+
+        <div class="chain-wire active" id="wire-out">
           <div class="wire-pulse"></div>
         </div>
 
@@ -208,7 +257,131 @@
         </div>
       </section>
 
-      <!-- Module 3: Audio Hardware & Routing Matrix -->
+      <!-- Module: Virtual Pedalboard FX Chain -->
+      <section class="rack-card module-pedalboard">
+        <div class="card-rack-ears"></div>
+        <div class="card-header">
+          <div class="card-title">
+            <span class="rack-indicator purple"></span> PEDALBOARD EFFECTS CHAIN
+          </div>
+          <div class="fx-header-badges">
+            <span class="badge" id="badge-fx-drive">DRIVE: OFF</span>
+            <span class="badge" id="badge-fx-delay">DELAY: OFF</span>
+            <span class="badge" id="badge-fx-reverb">REVERB: OFF</span>
+          </div>
+        </div>
+        <div class="card-body pedalboard-grid">
+          <!-- Stompbox 1: Pre-Drive (TS-9 Tube Screamer) -->
+          <div class="stompbox-card stomp-drive" id="stomp-drive-card">
+            <div class="stomp-header">
+              <div class="stomp-title">
+                <span class="stomp-led amber" id="led-fx-drive"></span>
+                <span class="stomp-name">TS-9 TUBE SCREAMER</span>
+              </div>
+              <button class="btn-stomp" id="btn-toggle-drive" title="Engage/Bypass Overdrive">
+                <span>STOMP</span>
+              </button>
+            </div>
+            <div class="stomp-controls">
+              <div class="stomp-param">
+                <div class="stomp-param-header">
+                  <span>DRIVE</span>
+                  <span id="val-drive-drive">50%</span>
+                </div>
+                <input type="range" class="pro-slider mini" id="slider-drive-drive" min="0.0" max="1.0" step="0.01" value="0.5">
+              </div>
+              <div class="stomp-param">
+                <div class="stomp-param-header">
+                  <span>TONE</span>
+                  <span id="val-drive-tone">400 Hz</span>
+                </div>
+                <input type="range" class="pro-slider mini" id="slider-drive-tone" min="100" max="1000" step="10" value="400">
+              </div>
+              <div class="stomp-param">
+                <div class="stomp-param-header">
+                  <span>LEVEL</span>
+                  <span id="val-drive-level">-10 dB</span>
+                </div>
+                <input type="range" class="pro-slider mini" id="slider-drive-level" min="-20.0" max="4.0" step="0.5" value="-10.0">
+              </div>
+            </div>
+          </div>
+
+          <!-- Stompbox 2: Stereo Delay -->
+          <div class="stompbox-card stomp-delay" id="stomp-delay-card">
+            <div class="stomp-header">
+              <div class="stomp-title">
+                <span class="stomp-led cyan" id="led-fx-delay"></span>
+                <span class="stomp-name">STEREO DELAY</span>
+              </div>
+              <button class="btn-stomp" id="btn-toggle-delay" title="Engage/Bypass Delay">
+                <span>STOMP</span>
+              </button>
+            </div>
+            <div class="stomp-controls">
+              <div class="stomp-param">
+                <div class="stomp-param-header">
+                  <span>TIME</span>
+                  <span id="val-delay-time">350 ms</span>
+                </div>
+                <input type="range" class="pro-slider mini" id="slider-delay-time" min="20" max="1500" step="10" value="350">
+              </div>
+              <div class="stomp-param">
+                <div class="stomp-param-header">
+                  <span>FEEDBACK</span>
+                  <span id="val-delay-lfo">20%</span>
+                </div>
+                <input type="range" class="pro-slider mini" id="slider-delay-lfo" min="0.2" max="3.0" step="0.1" value="0.2">
+              </div>
+              <div class="stomp-param">
+                <div class="stomp-param-header">
+                  <span>MIX</span>
+                  <span id="val-delay-level">-8 dB</span>
+                </div>
+                <input type="range" class="pro-slider mini" id="slider-delay-level" min="-20.0" max="10.0" step="0.5" value="-8.0">
+              </div>
+            </div>
+          </div>
+
+          <!-- Stompbox 3: Studio Reverb -->
+          <div class="stompbox-card stomp-reverb" id="stomp-reverb-card">
+            <div class="stomp-header">
+              <div class="stomp-title">
+                <span class="stomp-led purple" id="led-fx-reverb"></span>
+                <span class="stomp-name">STUDIO REVERB</span>
+              </div>
+              <button class="btn-stomp" id="btn-toggle-reverb" title="Engage/Bypass Reverb">
+                <span>STOMP</span>
+              </button>
+            </div>
+            <div class="stomp-controls">
+              <div class="stomp-param">
+                <div class="stomp-param-header">
+                  <span>ROOM SIZE</span>
+                  <span id="val-reverb-room">50%</span>
+                </div>
+                <input type="range" class="pro-slider mini" id="slider-reverb-room" min="0.0" max="1.0" step="0.02" value="0.5">
+              </div>
+              <div class="stomp-param">
+                <div class="stomp-param-header">
+                  <span>DAMPING</span>
+                  <span id="val-reverb-damp">30%</span>
+                </div>
+                <input type="range" class="pro-slider mini" id="slider-reverb-damp" min="0.0" max="1.0" step="0.02" value="0.3">
+              </div>
+              <div class="stomp-param">
+                <div class="stomp-param-header">
+                  <span>DRY / WET</span>
+                  <span id="val-reverb-mix">30%</span>
+                </div>
+                <input type="range" class="pro-slider mini" id="slider-reverb-mix" min="0" max="100" step="1" value="30">
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 4: Audio Hardware & Routing Matrix -->
       <section class="rack-card module-hw">
         <div class="card-rack-ears"></div>
         <div class="card-header">

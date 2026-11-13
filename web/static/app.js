@@ -9,6 +9,7 @@ const API = {
   setCab: '/api/cab',
   setRouting: '/api/routing',
   setBuffer: '/api/buffer',
+  setFx: '/api/fx',
   setGain: '/api/gain',
   setQuality: '/api/quality',
   tunerStream: '/api/tuner/stream',
@@ -35,6 +36,53 @@ const chainInLabel = document.getElementById('chain-in-label');
 const chainOutLabel = document.getElementById('chain-out-label');
 const nodeCab = document.getElementById('node-cab');
 const wireCab = document.getElementById('wire-cab');
+
+const nodeDrive = document.getElementById('node-drive');
+const wireDrive = document.getElementById('wire-drive');
+const chainDriveState = document.getElementById('chain-drive-state');
+const nodeDelay = document.getElementById('node-delay');
+const wireDelay = document.getElementById('wire-delay');
+const chainDelayState = document.getElementById('chain-delay-state');
+const nodeReverb = document.getElementById('node-reverb');
+const wireReverb = document.getElementById('wire-reverb');
+const chainReverbState = document.getElementById('chain-reverb-state');
+
+// Pedalboard Badges & Cards
+const badgeFxDrive = document.getElementById('badge-fx-drive');
+const badgeFxDelay = document.getElementById('badge-fx-delay');
+const badgeFxReverb = document.getElementById('badge-fx-reverb');
+
+const stompDriveCard = document.getElementById('stomp-drive-card');
+const ledFxDrive = document.getElementById('led-fx-drive');
+const btnToggleDrive = document.getElementById('btn-toggle-drive');
+const sliderDriveDrive = document.getElementById('slider-drive-drive');
+const valDriveDrive = document.getElementById('val-drive-drive');
+const sliderDriveTone = document.getElementById('slider-drive-tone');
+const valDriveTone = document.getElementById('val-drive-tone');
+const sliderDriveLevel = document.getElementById('slider-drive-level');
+const valDriveLevel = document.getElementById('val-drive-level');
+
+const stompDelayCard = document.getElementById('stomp-delay-card');
+const ledFxDelay = document.getElementById('led-fx-delay');
+const btnToggleDelay = document.getElementById('btn-toggle-delay');
+const sliderDelayTime = document.getElementById('slider-delay-time');
+const valDelayTime = document.getElementById('val-delay-time');
+const sliderDelayLfo = document.getElementById('slider-delay-lfo');
+const valDelayLfo = document.getElementById('val-delay-lfo');
+const sliderDelayLevel = document.getElementById('slider-delay-level');
+const valDelayMix = document.getElementById('val-delay-mix');
+
+const stompReverbCard = document.getElementById('stomp-reverb-card');
+const ledFxReverb = document.getElementById('led-fx-reverb');
+const btnToggleReverb = document.getElementById('btn-toggle-reverb');
+const sliderReverbRoom = document.getElementById('slider-reverb-room');
+const valReverbRoom = document.getElementById('val-reverb-room');
+const sliderReverbDamp = document.getElementById('slider-reverb-damp');
+const valReverbDamp = document.getElementById('val-reverb-damp');
+const sliderReverbMix = document.getElementById('slider-reverb-mix');
+const valReverbMix = document.getElementById('val-reverb-mix');
+
+let isUserDraggingFx = false;
 
 const displayModelName = document.getElementById('display-model-name');
 const displayModelMeta = document.getElementById('display-model-meta');
@@ -221,6 +269,89 @@ function renderStatus(data) {
     if (data.dsp.output_level !== undefined) {
       sliderOutGain.value = data.dsp.output_level;
       valOutGain.textContent = formatGain(data.dsp.output_level);
+    }
+  }
+
+  // Render Pedalboard FX
+  if (data.fx) {
+    const fx = data.fx;
+    const d = fx.drive || {};
+    const l = fx.delay || {};
+    const r = fx.reverb || {};
+
+    // Drive Stompbox & Node
+    stompDriveCard.classList.toggle('active', !!d.enabled);
+    ledFxDrive.classList.toggle('active', !!d.enabled);
+    btnToggleDrive.classList.toggle('active', !!d.enabled);
+    btnToggleDrive.textContent = d.enabled ? 'ENGAGED' : 'STOMP';
+    badgeFxDrive.textContent = d.enabled ? 'DRIVE: ACTIVE' : 'DRIVE: OFF';
+    badgeFxDrive.className = d.enabled ? 'badge active' : 'badge';
+    if (chainDriveState) chainDriveState.textContent = d.enabled ? 'TS-9' : 'BYPASS';
+    if (nodeDrive) nodeDrive.classList.toggle('active', !!d.enabled);
+    if (wireDrive) wireDrive.classList.toggle('active', !!d.enabled);
+
+    // Delay Stompbox & Node
+    stompDelayCard.classList.toggle('active', !!l.enabled);
+    ledFxDelay.classList.toggle('active', !!l.enabled);
+    btnToggleDelay.classList.toggle('active', !!l.enabled);
+    btnToggleDelay.textContent = l.enabled ? 'ENGAGED' : 'STOMP';
+    badgeFxDelay.textContent = l.enabled ? 'DELAY: ACTIVE' : 'DELAY: OFF';
+    badgeFxDelay.className = l.enabled ? 'badge active' : 'badge';
+    if (chainDelayState) chainDelayState.textContent = l.enabled ? 'DELAY' : 'BYPASS';
+    if (nodeDelay) nodeDelay.classList.toggle('active', !!l.enabled);
+    if (wireDelay) wireDelay.classList.toggle('active', !!l.enabled);
+
+    // Reverb Stompbox & Node
+    stompReverbCard.classList.toggle('active', !!r.enabled);
+    ledFxReverb.classList.toggle('active', !!r.enabled);
+    btnToggleReverb.classList.toggle('active', !!r.enabled);
+    btnToggleReverb.textContent = r.enabled ? 'ENGAGED' : 'STOMP';
+    badgeFxReverb.textContent = r.enabled ? 'REVERB: ACTIVE' : 'REVERB: OFF';
+    badgeFxReverb.className = r.enabled ? 'badge active' : 'badge';
+    if (chainReverbState) chainReverbState.textContent = r.enabled ? 'REVERB' : 'BYPASS';
+    if (nodeReverb) nodeReverb.classList.toggle('active', !!r.enabled);
+    if (wireReverb) wireReverb.classList.toggle('active', !!r.enabled);
+
+    // Sliders & Readouts (only update when user is not dragging)
+    if (!isUserDraggingFx) {
+      if (d.drive !== undefined) {
+        sliderDriveDrive.value = d.drive;
+        valDriveDrive.textContent = `${Math.round(d.drive * 100)}%`;
+      }
+      if (d.tone !== undefined) {
+        sliderDriveTone.value = d.tone;
+        valDriveTone.textContent = `${Math.round(d.tone)} Hz`;
+      }
+      if (d.level !== undefined) {
+        sliderDriveLevel.value = d.level;
+        valDriveLevel.textContent = `${parseFloat(d.level).toFixed(1)} dB`;
+      }
+
+      if (l.time !== undefined) {
+        sliderDelayTime.value = l.time;
+        valDelayTime.textContent = `${Math.round(l.time)} ms`;
+      }
+      if (l.level !== undefined) {
+        sliderDelayLevel.value = l.level;
+        valDelayMix.textContent = `${parseFloat(l.level).toFixed(1)} dB`;
+      }
+      if (l.lfo !== undefined) {
+        sliderDelayLfo.value = l.lfo;
+        valDelayLfo.textContent = `${Math.round(l.lfo * 10)}%`;
+      }
+
+      if (r.roomsize !== undefined) {
+        sliderReverbRoom.value = r.roomsize;
+        valReverbRoom.textContent = `${Math.round(r.roomsize * 100)}%`;
+      }
+      if (r.damp !== undefined) {
+        sliderReverbDamp.value = r.damp;
+        valReverbDamp.textContent = `${Math.round(r.damp * 100)}%`;
+      }
+      if (r.dry_wet !== undefined) {
+        sliderReverbMix.value = r.dry_wet;
+        valReverbMix.textContent = `${Math.round(r.dry_wet)}%`;
+      }
     }
   }
 }
@@ -557,6 +688,66 @@ window.setGain = async function(channel, val) {
     body: JSON.stringify({ channel, value: val })
   });
 };
+
+// Pedalboard FX Stomp Buttons
+async function toggleFxSlot(slot, btnElement, cardElement, ledElement) {
+  const isCurrentlyOn = currentStatus && currentStatus.fx && currentStatus.fx[slot] && currentStatus.fx[slot].enabled;
+  const nextState = !isCurrentlyOn;
+  
+  cardElement.classList.toggle('active', nextState);
+  ledElement.classList.toggle('active', nextState);
+  btnElement.classList.toggle('active', nextState);
+  btnElement.textContent = nextState ? 'ENGAGED' : 'STOMP';
+
+  try {
+    const res = await fetch(API.setFx, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot, enabled: nextState })
+    });
+    if (res.ok) {
+      setTimeout(updateStatus, 150);
+    }
+  } catch (err) {
+    console.error('Failed to toggle FX slot:', slot, err);
+  }
+}
+
+btnToggleDrive.addEventListener('click', () => toggleFxSlot('drive', btnToggleDrive, stompDriveCard, ledFxDrive));
+btnToggleDelay.addEventListener('click', () => toggleFxSlot('delay', btnToggleDelay, stompDelayCard, ledFxDelay));
+btnToggleReverb.addEventListener('click', () => toggleFxSlot('reverb', btnToggleReverb, stompReverbCard, ledFxReverb));
+
+function attachFxSlider(slider, readout, slot, paramKey, formatFn) {
+  let debounceTimer = null;
+  slider.addEventListener('input', (e) => {
+    isUserDraggingFx = true;
+    const val = parseFloat(e.target.value);
+    readout.textContent = formatFn(val);
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      fetch(API.setFx, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot, [paramKey]: val })
+      }).catch(err => console.error(err));
+    }, 50);
+  });
+  slider.addEventListener('change', () => {
+    isUserDraggingFx = false;
+  });
+}
+
+attachFxSlider(sliderDriveDrive, valDriveDrive, 'drive', 'drive', v => `${Math.round(v * 100)}%`);
+attachFxSlider(sliderDriveTone, valDriveTone, 'drive', 'tone', v => `${Math.round(v)} Hz`);
+attachFxSlider(sliderDriveLevel, valDriveLevel, 'drive', 'level', v => `${v.toFixed(1)} dB`);
+
+attachFxSlider(sliderDelayTime, valDelayTime, 'delay', 'time', v => `${Math.round(v)} ms`);
+attachFxSlider(sliderDelayLevel, valDelayMix, 'delay', 'level', v => `${v.toFixed(1)} dB`);
+attachFxSlider(sliderDelayLfo, valDelayLfo, 'delay', 'lfo', v => `${Math.round(v * 10)}%`);
+
+attachFxSlider(sliderReverbRoom, valReverbRoom, 'reverb', 'roomsize', v => `${Math.round(v * 100)}%`);
+attachFxSlider(sliderReverbDamp, valReverbDamp, 'reverb', 'damp', v => `${Math.round(v * 100)}%`);
+attachFxSlider(sliderReverbMix, valReverbMix, 'reverb', 'dry_wet', v => `${Math.round(v)}%`);
 
 btnRestart.addEventListener('click', async () => {
   btnRestart.style.transform = 'rotate(180deg)';

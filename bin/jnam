@@ -19,6 +19,7 @@ CAB_CONF = os.path.join(NAM_DIR, "cab.conf")
 CAB_MODE_FILE = os.path.join(NAM_DIR, "cab_mode")
 AUDIO_DEV_FILE = os.path.join(NAM_DIR, "audio_device")
 BUFFER_FILE = os.path.join(NAM_DIR, "buffer_size")
+FX_FILE = os.path.join(NAM_DIR, "fx.json")
 IN_CHAN_FILE = os.path.join(NAM_DIR, "input_channel")
 OUT_CHAN_FILE = os.path.join(NAM_DIR, "output_channel")
 CONNECTIONS_XML = os.path.join(NAM_DIR, "connections.xml")
@@ -336,6 +337,12 @@ def cmd_status(args=None):
         cab_status_str = f"{YELLOW}BYPASSED{RESET} (Direct to playback, no Cab IR)"
     print(f"  {BOLD}Cab IR State:{RESET}        {cab_status_str} {DIM}[mode: {cab_mode}]{RESET}")
 
+    fx = get_fx_state()
+    d_tag = f"{GREEN}ON{RESET}" if fx.get("drive", {}).get("enabled") else f"{DIM}OFF{RESET}"
+    l_tag = f"{GREEN}ON{RESET}" if fx.get("delay", {}).get("enabled") else f"{DIM}OFF{RESET}"
+    r_tag = f"{GREEN}ON{RESET}" if fx.get("reverb", {}).get("enabled") else f"{DIM}OFF{RESET}"
+    print(f"  {BOLD}Pedalboard FX:{RESET}       Drive [{d_tag}]  Delay [{l_tag}]  Reverb [{r_tag}]")
+
     # Real-Time Engine Processes
     try:
         ps_out = subprocess.check_output(["ps", "-eo", "pid,psr,rtprio,comm,%cpu,%mem"], stderr=subprocess.DEVNULL).decode()
@@ -440,6 +447,72 @@ def cmd_buffer(args):
         print(f"\n{GREEN}✓ Buffer size dynamically switched to {target} samples ({new_hw['latency_ms']} ms) in real-time.{RESET}\n")
     else:
         print(f"\n{GREEN}✓ Buffer size saved to {target} samples ({new_hw['latency_ms']} ms). Will apply when JACK starts.{RESET}\n")
+
+def get_fx_state():
+    default_fx = {
+        "drive": {"enabled": False, "model": "ts9", "drive": 0.5, "tone": 400.0, "level": -10.0},
+        "delay": {"enabled": False, "time": 350.0, "level": -8.0, "lfo": 0.2},
+        "reverb": {"enabled": False, "dry_wet": 30.0, "roomsize": 0.5, "damp": 0.3}
+    }
+    if os.path.exists(FX_FILE):
+        try:
+            with open(FX_FILE, "r") as f:
+                d = json.load(f)
+                for k, v in d.items():
+                    if k in default_fx and isinstance(v, dict):
+                        default_fx[k].update(v)
+        except Exception:
+            pass
+    return default_fx
+
+def cmd_fx(args):
+    fx = get_fx_state()
+    if not hasattr(args, "slot") or not args.slot:
+        print(f"\n{BOLD}{CYAN}======================================================{RESET}")
+        print(f"{BOLD}{CYAN}       JNAM - Virtual Pedalboard FX Chain Status      {RESET}")
+        print(f"{BOLD}{CYAN}======================================================{RESET}")
+        d = fx["drive"]
+        d_stat = f"{GREEN}ACTIVE{RESET}" if d.get("enabled") else f"{YELLOW}BYPASSED{RESET}"
+        print(f"  {BOLD}[Pre-Drive]:{RESET}   {d_stat} {DIM}(TS-9 Tube Screamer){RESET}")
+        print(f"                 Drive: {int(d.get('drive',0.5)*100)}% | Tone: {int(d.get('tone',400))} Hz | Level: {d.get('level',-10)} dB")
+
+        l = fx["delay"]
+        l_stat = f"{GREEN}ACTIVE{RESET}" if l.get("enabled") else f"{YELLOW}BYPASSED{RESET}"
+        print(f"  {BOLD}[Delay]:{RESET}       {l_stat} {DIM}(Stereo Digital Delay){RESET}")
+        print(f"                 Time: {int(l.get('time',350))} ms | Level: {l.get('level',-8)} dB")
+
+        r = fx["reverb"]
+        r_stat = f"{GREEN}ACTIVE{RESET}" if r.get("enabled") else f"{YELLOW}BYPASSED{RESET}"
+        print(f"  {BOLD}[Reverb]:{RESET}      {r_stat} {DIM}(Studio Reverb){RESET}")
+        print(f"                 Room: {int(r.get('roomsize',0.5)*100)}% | Mix: {int(r.get('dry_wet',30))}% | Damp: {int(r.get('damp',0.3)*100)}%")
+        print(f"\n  To toggle: jnam fx drive on/off | jnam fx delay on/off | jnam fx reverb on/off\n")
+        return
+
+    slot = args.slot.lower()
+    if slot not in ["drive", "delay", "reverb"]:
+        print(f"{RED}Invalid slot: {slot}. Options: drive, delay, reverb{RESET}")
+        return
+
+    if hasattr(args, "action") and args.action:
+        act = args.action.lower()
+        if act in ["on", "enable", "1", "true"]:
+            fx[slot]["enabled"] = True
+            print(f"{GREEN}✓ {slot.capitalize()} FX Engaged!{RESET}")
+        elif act in ["off", "disable", "bypass", "0", "false"]:
+            fx[slot]["enabled"] = False
+            print(f"{YELLOW}✓ {slot.capitalize()} FX Bypassed.{RESET}")
+
+    with open(FX_FILE, "w") as f:
+        json.dump(fx, f, indent=2)
+
+    # Re-apply live routing
+    try:
+        sys.path.insert(0, os.path.join(NAM_DIR, "web"))
+        import server
+        server.apply_jack_routing_live()
+    except Exception:
+        pass
+    cmd_fx(argparse.Namespace(slot=None))
 
 def cmd_list(args=None):
     models = get_models()
@@ -724,6 +797,11 @@ def main():
     p_quality = subparsers.add_parser("quality", help="Set quality scale (0.0=Lite, 1.0=Full)")
     p_quality.add_argument("value", type=float, help="Value between 0.0 and 1.0")
 
+    # fx
+    p_fx = subparsers.add_parser("fx", help="View or control pedalboard effects (drive, delay, reverb)")
+    p_fx.add_argument("slot", nargs="?", choices=["drive", "delay", "reverb"], help="Effect slot: drive, delay, or reverb")
+    p_fx.add_argument("action", nargs="?", help="Action: on, off, or bypass")
+
     # web
     p_web = subparsers.add_parser("web", help="Start the Web UI controller server")
     p_web.add_argument("--port", type=int, default=8080, help="Port to listen on (default: 8080)")
@@ -760,6 +838,8 @@ def main():
         cmd_gain(args)
     elif args.command == "quality":
         cmd_quality(args)
+    elif args.command == "fx":
+        cmd_fx(args)
     elif args.command == "web":
         cmd_web(args)
     elif args.command == "test":

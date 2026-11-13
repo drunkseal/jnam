@@ -25,8 +25,34 @@ BUFFER_FILE = os.path.join(NAM_DIR, "buffer_size")
 IN_CHAN_FILE = os.path.join(NAM_DIR, "input_channel")
 OUT_CHAN_FILE = os.path.join(NAM_DIR, "output_channel")
 CONNECTIONS_XML = os.path.join(NAM_DIR, "connections.xml")
+FX_FILE = os.path.join(NAM_DIR, "fx.json")
 FIFO_PATH = "/tmp/nam_control.fifo"
+DRIVE_FIFO = "/tmp/nam_drive.fifo"
+DELAY_FIFO = "/tmp/nam_delay.fifo"
+REVERB_FIFO = "/tmp/nam_reverb.fifo"
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+DEFAULT_FX = {
+    "drive": {
+        "enabled": False,
+        "model": "ts9",
+        "drive": 0.5,
+        "tone": 400.0,
+        "level": -10.0
+    },
+    "delay": {
+        "enabled": False,
+        "time": 350.0,
+        "level": -8.0,
+        "lfo": 0.2
+    },
+    "reverb": {
+        "enabled": False,
+        "dry_wet": 30.0,
+        "roomsize": 0.5,
+        "damp": 0.3
+    }
+}
 
 state_cache = {
     "input_level": 0.0,
@@ -235,48 +261,154 @@ def set_buffer_size(size):
         pass
     return applied_live
 
-def generate_connections_xml(in_chan=None, out_chan=None, cab_enabled=None):
+def get_fx_state():
+    if os.path.exists(FX_FILE):
+        try:
+            with open(FX_FILE, "r") as f:
+                data = json.load(f)
+                res = {k: v.copy() for k, v in DEFAULT_FX.items()}
+                for k, v in data.items():
+                    if k in res and isinstance(v, dict):
+                        res[k].update(v)
+                return res
+        except Exception:
+            pass
+    return {k: v.copy() for k, v in DEFAULT_FX.items()}
+
+def save_fx_state(state):
+    try:
+        os.makedirs(NAM_DIR, exist_ok=True)
+        with open(FX_FILE, "w") as f:
+            json.dump(state, f, indent=2)
+    except Exception:
+        pass
+
+def send_fx_fifo(fifo_path, cmd):
+    if os.path.exists(fifo_path):
+        try:
+            with open(fifo_path, "w") as fp:
+                fp.write(cmd + "\n")
+            return True
+        except Exception:
+            return False
+    return False
+
+def update_fx_params(slot, params):
+    fx = get_fx_state()
+    if slot not in fx:
+        return fx
+    fx[slot].update(params)
+    save_fx_state(fx)
+
+    # Sync to real-time plugin FIFO
+    if slot == "drive":
+        if "drive" in params:
+            send_fx_fifo(DRIVE_FIFO, f"fslider2_ = {float(params['drive']):.6f}")
+        if "tone" in params:
+            send_fx_fifo(DRIVE_FIFO, f"fslider1_ = {float(params['tone']):.6f}")
+        if "level" in params:
+            send_fx_fifo(DRIVE_FIFO, f"fslider0_ = {float(params['level']):.6f}")
+        if "enabled" in params:
+            send_fx_fifo(DRIVE_FIFO, f"BYPASS = {1.0 if params['enabled'] else 0.0:.1f}")
+
+    elif slot == "delay":
+        if "time" in params:
+            t = float(params["time"])
+            send_fx_fifo(DELAY_FIFO, f"timt_l = {t:.6f}")
+            send_fx_fifo(DELAY_FIFO, f"timt_r = {t:.6f}")
+        if "level" in params:
+            l = float(params["level"])
+            send_fx_fifo(DELAY_FIFO, f"level_l = {l:.6f}")
+            send_fx_fifo(DELAY_FIFO, f"level_r = {l:.6f}")
+        if "lfo" in params:
+            send_fx_fifo(DELAY_FIFO, f"lfo = {float(params['lfo']):.6f}")
+        if "enabled" in params:
+            send_fx_fifo(DELAY_FIFO, f"BYPASS = {1.0 if params['enabled'] else 0.0:.1f}")
+
+    elif slot == "reverb":
+        if "dry_wet" in params:
+            send_fx_fifo(REVERB_FIFO, f"dry_wet = {float(params['dry_wet']):.6f}")
+        if "roomsize" in params:
+            send_fx_fifo(REVERB_FIFO, f"roomsize = {float(params['roomsize']):.6f}")
+        if "damp" in params:
+            send_fx_fifo(REVERB_FIFO, f"damp = {float(params['damp']):.6f}")
+
+    return fx
+
+def generate_connections_xml(in_chan=None, out_chan=None, cab_enabled=None, fx_state=None):
     if in_chan is None:
         in_chan = get_input_channel()
     if out_chan is None:
         out_chan = get_output_channel()
     if cab_enabled is None:
         cab_enabled = is_cab_effective_enabled()
+    if fx_state is None:
+        fx_state = get_fx_state()
 
-    lines = [
-        '<?xml version="1.0" encoding="utf-8"?>',
-        '<aj-snapshot>',
-        '<jack>',
-        '  <client name="system">'
-    ]
+    drive_on = fx_state.get("drive", {}).get("enabled", False)
+    delay_on = fx_state.get("delay", {}).get("enabled", False)
+    reverb_on = fx_state.get("reverb", {}).get("enabled", False)
 
-    # Input routing
-    if in_chan in ["both", "1"]:
-        lines.append('    <port name="capture_1">\n      <connection port="nam:input" />\n    </port>')
-    if in_chan in ["both", "2"]:
-        lines.append('    <port name="capture_2">\n      <connection port="nam:input" />\n    </port>')
-    lines.append('  </client>')
+    in_ports = []
+    if in_chan in ["both", "1"]: in_ports.append("capture_1")
+    if in_chan in ["both", "2"]: in_ports.append("capture_2")
 
-    # Signal chain routing
-    if cab_enabled:
-        lines.append('  <client name="nam">\n    <port name="output">\n      <connection port="cab:in" />\n    </port>\n  </client>')
-        out_client = "cab"
-        out_port_name = "out"
+    clients = {}
+    def add_conn(src_client, src_port, dest_client_port):
+        if src_client not in clients:
+            clients[src_client] = {}
+        if src_port not in clients[src_client]:
+            clients[src_client][src_port] = []
+        if dest_client_port not in clients[src_client][src_port]:
+            clients[src_client][src_port].append(dest_client_port)
+
+    # 1. Inputs -> (Drive or NAM)
+    if drive_on:
+        for p in in_ports:
+            add_conn("system", p, "drive:in")
+        add_conn("drive", "out", "nam:input")
     else:
-        out_client = "nam"
-        out_port_name = "output"
+        for p in in_ports:
+            add_conn("system", p, "nam:input")
 
-    out_conns = []
+    # 2. NAM -> (Cab or Next)
+    if cab_enabled:
+        add_conn("nam", "output", "cab:in")
+        curr_out_l = ("cab", "out")
+        curr_out_r = ("cab", "out")
+    else:
+        curr_out_l = ("nam", "output")
+        curr_out_r = ("nam", "output")
+
+    # 3. (Cab/NAM) -> (Delay or Next)
+    if delay_on:
+        add_conn(curr_out_l[0], curr_out_l[1], "delay:in")
+        add_conn(curr_out_r[0], curr_out_r[1], "delay:in1")
+        curr_out_l = ("delay", "out")
+        curr_out_r = ("delay", "out1")
+
+    # 4. (Delay/Cab/NAM) -> (Reverb or Next)
+    if reverb_on:
+        add_conn(curr_out_l[0], curr_out_l[1], "reverb:in")
+        add_conn(curr_out_r[0], curr_out_r[1], "reverb:in1")
+        curr_out_l = ("reverb", "out")
+        curr_out_r = ("reverb", "out1")
+
+    # 5. Final Stage -> Playback
     if out_chan in ["stereo", "1"]:
-        out_conns.append('      <connection port="system:playback_1" />')
+        add_conn(curr_out_l[0], curr_out_l[1], "system:playback_1")
     if out_chan in ["stereo", "2"]:
-        out_conns.append('      <connection port="system:playback_2" />')
+        add_conn(curr_out_r[0], curr_out_r[1], "system:playback_2")
 
-    if out_conns:
-        lines.append(f'  <client name="{out_client}">\n    <port name="{out_port_name}">')
-        lines.extend(out_conns)
-        lines.append('    </port>\n  </client>')
-
+    lines = ['<?xml version="1.0" encoding="utf-8"?>', '<aj-snapshot>', '<jack>']
+    for c_name, ports in clients.items():
+        lines.append(f'  <client name="{c_name}">')
+        for p_name, dests in ports.items():
+            lines.append(f'    <port name="{p_name}">')
+            for d in dests:
+                lines.append(f'      <connection port="{d}" />')
+            lines.append('    </port>')
+        lines.append('  </client>')
     lines.append('</jack>')
     lines.append('</aj-snapshot>')
 
@@ -286,39 +418,9 @@ def generate_connections_xml(in_chan=None, out_chan=None, cab_enabled=None):
     return content
 
 def apply_jack_routing_live():
-    in_chan = get_input_channel()
-    out_chan = get_output_channel()
-    cab_enabled = is_cab_effective_enabled()
-
-    generate_connections_xml(in_chan, out_chan, cab_enabled)
-
-    for cap in ["system:capture_1", "system:capture_2"]:
-        subprocess.call(["jack_disconnect", cap, "nam:input"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    for src in ["nam:output", "cab:out"]:
-        for pb in ["system:playback_1", "system:playback_2"]:
-            subprocess.call(["jack_disconnect", src, pb], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    subprocess.call(["jack_disconnect", "nam:output", "cab:in"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    if in_chan in ["both", "1"]:
-        subprocess.call(["jack_connect", "system:capture_1", "nam:input"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if in_chan in ["both", "2"]:
-        subprocess.call(["jack_connect", "system:capture_2", "nam:input"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    if cab_enabled:
-        subprocess.call(["jack_connect", "nam:output", "cab:in"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        out_src = "cab:out"
-    else:
-        out_src = "nam:output"
-
-    if out_chan in ["stereo", "1"]:
-        subprocess.call(["jack_connect", out_src, "system:playback_1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if out_chan in ["stereo", "2"]:
-        subprocess.call(["jack_connect", out_src, "system:playback_2"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
+    generate_connections_xml()
     try:
-        subprocess.call(["pkill", "-x", "aj-snapshot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.Popen(["aj-snapshot", "-d", "-j", "-q", CONNECTIONS_XML], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.call(["aj-snapshot", "-r", "-j", "-x", CONNECTIONS_XML], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
 
@@ -513,6 +615,7 @@ def get_full_status():
             "latency_ms": hw_p["latency_ms"]
         },
         "dsp": state_cache,
+        "fx": get_fx_state(),
         "tuner": {
             "active": state_cache["tuner_active"]
         },
@@ -591,6 +694,9 @@ class JNAMHandler(BaseHTTPRequestHandler):
                 "configured": get_audio_device(),
                 "cards": get_alsa_cards()
             })
+            return
+        elif path == "/api/fx":
+            self.send_json(get_fx_state())
             return
         elif path == "/api/tuner/stream":
             # Server-Sent Events (SSE) Real-Time Pitch Data Stream
@@ -759,6 +865,25 @@ class JNAMHandler(BaseHTTPRequestHandler):
                 })
             else:
                 self.send_json({"success": False, "error": "Invalid buffer size. Options: 64, 128, 256, 512, 1024"}, code=400)
+            return
+
+        elif path == "/api/fx":
+            slot = req_data.get("slot")
+            if slot in ["drive", "delay", "reverb"]:
+                changed_enabled = False
+                params = {}
+                if "enabled" in req_data:
+                    params["enabled"] = bool(req_data["enabled"])
+                    changed_enabled = True
+                for p in ["drive", "tone", "level", "time", "lfo", "dry_wet", "roomsize", "damp", "model"]:
+                    if p in req_data:
+                        params[p] = req_data[p]
+                new_fx = update_fx_params(slot, params)
+                if changed_enabled:
+                    apply_jack_routing_live()
+                self.send_json({"success": True, "fx": new_fx})
+            else:
+                self.send_json({"success": False, "error": "Invalid slot. Options: drive, delay, reverb"}, code=400)
             return
 
         elif path == "/api/gain":
