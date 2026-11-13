@@ -352,6 +352,7 @@ function renderStatus(data) {
         sliderReverbMix.value = r.dry_wet;
         valReverbMix.textContent = `${Math.round(r.dry_wet)}%`;
       }
+      syncAllKnobsVisuals();
     }
   }
 }
@@ -717,6 +718,99 @@ btnToggleDrive.addEventListener('click', () => toggleFxSlot('drive', btnToggleDr
 btnToggleDelay.addEventListener('click', () => toggleFxSlot('delay', btnToggleDelay, stompDelayCard, ledFxDelay));
 btnToggleReverb.addEventListener('click', () => toggleFxSlot('reverb', btnToggleReverb, stompReverbCard, ledFxReverb));
 
+// Boutique Rotary Knob Controllers for Stompboxes
+function updateKnobVisual(input) {
+  if (!input) return;
+  const unit = input.closest('.pedal-knob-unit');
+  if (!unit) return;
+  const cap = unit.querySelector('.knob-cap');
+  const arc = unit.querySelector('.knob-track-val');
+  if (!cap || !arc) return;
+
+  const min = parseFloat(input.min);
+  const max = parseFloat(input.max);
+  const val = parseFloat(input.value);
+  const pct = Math.max(0, Math.min(1, (val - min) / (max - min)));
+  const angle = -135 + (pct * 270);
+  cap.style.transform = `rotate(${angle}deg)`;
+  const totalArc = 108.38; // 270 deg of radius 23
+  arc.style.strokeDashoffset = totalArc * (1 - pct);
+}
+
+function syncAllKnobsVisuals() {
+  document.querySelectorAll('.pedal-knob-unit input').forEach(input => {
+    updateKnobVisual(input);
+  });
+}
+
+function initRotaryKnobs() {
+  document.querySelectorAll('.pedal-knob-unit').forEach(unit => {
+    const input = unit.querySelector('input[type="range"]');
+    const knob = unit.querySelector('.knob-wrapper');
+    if (!input || !knob) return;
+
+    updateKnobVisual(input);
+
+    const min = parseFloat(input.min);
+    const max = parseFloat(input.max);
+    const step = parseFloat(input.step) || ((max - min) / 100);
+
+    let isDragging = false;
+    let startY = 0;
+    let startVal = 0;
+
+    knob.addEventListener('pointerdown', (e) => {
+      isDragging = true;
+      isUserDraggingFx = true;
+      startY = e.clientY;
+      startVal = parseFloat(input.value);
+      knob.setPointerCapture(e.pointerId);
+      knob.classList.add('dragging');
+      e.preventDefault();
+    });
+
+    knob.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      const deltaY = startY - e.clientY; // Up = positive
+      const range = max - min;
+      const sensitivity = e.shiftKey ? 360 : 120; // Shift for fine-tuning
+      const valDelta = (deltaY / sensitivity) * range;
+      let newVal = Math.max(min, Math.min(max, startVal + valDelta));
+      newVal = Math.round(newVal / step) * step;
+
+      input.value = newVal;
+      updateKnobVisual(input);
+      input.dispatchEvent(new Event('input'));
+    });
+
+    const endDrag = (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      isUserDraggingFx = false;
+      knob.classList.remove('dragging');
+      try { knob.releasePointerCapture(e.pointerId); } catch(err) {}
+      input.dispatchEvent(new Event('change'));
+    };
+
+    knob.addEventListener('pointerup', endDrag);
+    knob.addEventListener('pointercancel', endDrag);
+
+    // Mouse Wheel support
+    knob.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const range = max - min;
+      const dir = e.deltaY < 0 ? 1 : -1;
+      const mult = e.shiftKey ? 1 : (range > 10 ? 5 : 2);
+      let val = parseFloat(input.value) + (dir * step * mult);
+      val = Math.max(min, Math.min(max, Math.round(val / step) * step));
+      input.value = val;
+      updateKnobVisual(input);
+      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('change'));
+    }, { passive: false });
+  });
+}
+
 function attachFxSlider(slider, readout, slot, paramKey, formatFn) {
   let debounceTimer = null;
   slider.addEventListener('input', (e) => {
@@ -772,5 +866,6 @@ btnRestart.addEventListener('click', async () => {
 loadModels();
 loadIrs();
 loadDevices();
+initRotaryKnobs();
 updateStatus();
 setInterval(updateStatus, 4000);

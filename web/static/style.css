@@ -956,52 +956,169 @@ body.daw-workspace {
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
+/* ==============================================================================
+   BOUTIQUE HARDWARE ROTARY KNOB CONTROLS
+   ============================================================================== */
 .stomp-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 6px 0 2px 0;
 }
 
-.stomp-param {
+.pedal-knob-unit {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 5px;
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.stomp-param-header {
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  font-weight: 700;
+.knob-label {
+  font-family: var(--font-ui);
+  font-size: 0.60rem;
+  font-weight: 800;
+  letter-spacing: 1.2px;
   color: var(--text-muted);
+  text-transform: uppercase;
 }
 
-.stomp-param-header span:last-child {
-  color: var(--text-primary);
+/* Knob Physical Dial Container */
+.knob-wrapper {
+  width: 50px;
+  height: 50px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
 }
 
-.pro-slider.mini {
-  height: 24px;
-  touch-action: pan-x;
+.knob-wrapper:active,
+.knob-wrapper.dragging {
+  cursor: grabbing;
 }
 
-.pro-slider.mini::-webkit-slider-runnable-track {
-  height: 6px;
-  background: #090b0f;
-  border: 1px solid #1e2430;
-  border-radius: 3px;
+/* Circular Arc Gauge SVG */
+.knob-svg {
+  width: 50px;
+  height: 50px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  transform: rotate(135deg); /* Starts arc at 7:30 o'clock */
 }
 
-.pro-slider.mini::-webkit-slider-thumb {
-  width: 18px;
-  height: 18px;
-  margin-top: -6px;
+.knob-track-bg {
+  fill: none;
+  stroke: #12151d;
+  stroke-width: 4;
+  stroke-dasharray: 108.38 144.51;
+  stroke-linecap: round;
+}
+
+.knob-track-val {
+  fill: none;
+  stroke-width: 4;
+  stroke-dasharray: 108.38 144.51;
+  stroke-dashoffset: 54.19; /* default 50% */
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.05s ease-out;
+}
+
+/* Arc Color Glows matching pedal theme */
+.knob-track-val.val-amber {
+  stroke: #f59e0b;
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.7));
+}
+
+.knob-track-val.val-cyan {
+  stroke: #06b6d4;
+  filter: drop-shadow(0 0 3px rgba(6, 182, 212, 0.7));
+}
+
+.knob-track-val.val-purple {
+  stroke: #a855f7;
+  filter: drop-shadow(0 0 3px rgba(168, 85, 247, 0.7));
+}
+
+/* 3D Cylindrical Aluminum Potentiometer Cap */
+.knob-cap {
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #5a647a 0%, #20242e 100%);
+  background: 
+    radial-gradient(circle at 40% 35%, rgba(255, 255, 255, 0.16) 0%, transparent 55%),
+    conic-gradient(from 0deg, #2b3240, #191c24 30%, #3a4457 50%, #191c24 70%, #2b3240 100%);
   border: 1px solid #101217;
-  border-top: 1px solid #7583a0;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.7);
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 
+    0 4px 8px rgba(0, 0, 0, 0.7),
+    0 1px 2px rgba(0, 0, 0, 0.9),
+    inset 0 1px 1px rgba(255, 255, 255, 0.2),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.8);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  transform: rotate(0deg);
+  transition: transform 0.05s ease-out;
+  pointer-events: none;
+}
+
+/* Subtle Sunken Center Bezel */
+.knob-cap::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1a1e28 0%, #11131a 100%);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* Illuminated White Marker Pointer Notch */
+.knob-indicator {
+  width: 2.5px;
+  height: 8px;
+  background: #ffffff;
+  border-radius: 1px;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+  z-index: 2;
+}
+
+/* Numeric Value Readout Badge */
+.knob-readout {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #fff;
+  background: #090b0f;
+  border: 1px solid #1a1e28;
+  border-radius: 3px;
+  padding: 1px 6px;
+  text-align: center;
+  min-width: 44px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
+  letter-spacing: 0.3px;
+}
+
+/* Hidden Form Range Input (accessible & synced) */
+.knob-hidden-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
 }
 
 /* ==============================================================================
