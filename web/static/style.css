@@ -1046,6 +1046,11 @@ body.daw-workspace {
   filter: drop-shadow(0 0 3px rgba(168, 85, 247, 0.7));
 }
 
+.knob-track-val.val-green {
+  stroke: #10b981;
+  filter: drop-shadow(0 0 3px rgba(16, 185, 129, 0.7));
+}
+
 /* 3D Cylindrical Aluminum Potentiometer Cap */
 .knob-cap {
   width: 34px;
@@ -1152,112 +1157,60 @@ body.daw-workspace {
   color: var(--meter-amber);
 }
 
-.sliders-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.slider-container {
-  background: #14171e;
-  border: 1px solid #232834;
-  border-radius: var(--radius-control);
-  padding: 12px;
+/* Console Mastering Knobs (Module DSP) */
+.console-gain-body {
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  padding: 10px;
+}
+
+.console-dials-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
+  align-items: center;
+}
+
+.console-knob-unit {
+  background: #14171f;
+  border: 1px solid #232835;
+  border-radius: var(--radius-control);
+  padding: 10px 6px;
+  gap: 6px;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.slider-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+.knob-wrapper.knob-lg {
+  width: 58px;
+  height: 58px;
 }
 
-.slider-name {
-  font-size: 0.68rem;
-  font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: 1px;
+.knob-svg.knob-svg-lg {
+  width: 58px;
+  height: 58px;
 }
 
-.slider-val {
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  font-weight: 800;
+.knob-cap.knob-cap-lg {
+  width: 40px;
+  height: 40px;
+}
+
+.knob-cap.knob-cap-lg::before {
+  width: 16px;
+  height: 16px;
+}
+
+.knob-readout.val-gain {
   color: var(--meter-green);
-  font-variant-numeric: tabular-nums;
+  font-size: 0.70rem;
 }
 
-/* Fader Scale & Track Container */
-.slider-track-wrap {
+.gain-quick-btns {
   display: flex;
-  flex-direction: column;
+  width: 100%;
   gap: 4px;
-}
-
-.fader-scale {
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  padding: 0 4px;
-}
-
-/* FL Studio / Hardware Fader Slider */
-.pro-slider {
-  width: 100%;
-  height: 22px;
-  appearance: none;
-  background: transparent;
-  outline: none;
-  cursor: pointer;
-}
-
-/* Webkit Track (Recessed Fader Well) */
-.pro-slider::-webkit-slider-runnable-track {
-  width: 100%;
-  height: 8px;
-  background: #0a0c10;
-  border: 1px solid #202532;
-  border-bottom: 1px solid #2d3446;
-  border-radius: 2px;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
-}
-
-/* Webkit Fader Thumb (Brushed Metal Mixer Cap) */
-.pro-slider::-webkit-slider-thumb {
-  appearance: none;
-  width: 22px;
-  height: 18px;
-  margin-top: -6px;
-  border-radius: 2px;
-  background: 
-    linear-gradient(180deg, #4d5568 0%, #2a2e38 100%);
-  border: 1px solid #14171d;
-  border-top: 1px solid #6b7690;
-  box-shadow: 
-    0 3px 6px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  cursor: ew-resize;
-  position: relative;
-}
-
-.pro-slider:hover::-webkit-slider-thumb {
-  background: linear-gradient(180deg, #586177 0%, #323743 100%);
-  box-shadow: 
-    0 0 8px rgba(243, 129, 52, 0.3),
-    0 3px 6px rgba(0, 0, 0, 0.7);
-}
-
-/* Quick dB Punch Buttons */
-.slider-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
+  margin-top: 2px;
 }
 
 .btn-micro {

@@ -539,50 +539,48 @@
             <button class="quality-btn" data-quality="0.0" id="btn-quality-lite">LITE (0.0)</button>
           </div>
         </div>
-        <div class="card-body sliders-grid">
-          <div class="slider-container">
-            <div class="slider-header">
-              <span class="slider-name">PREAMP INPUT</span>
-              <span class="slider-val" id="val-in-gain">0.0 dB</span>
-            </div>
-            <div class="slider-track-wrap">
-              <div class="fader-scale">
-                <span>+12</span>
-                <span>+6</span>
-                <span>0</span>
-                <span>-6</span>
-                <span>-12</span>
-                <span>-24</span>
+        <div class="card-body console-gain-body">
+          <div class="console-dials-row">
+            <!-- Console Dial 1: Preamp Input -->
+            <div class="pedal-knob-unit console-knob-unit">
+              <span class="knob-label">PREAMP INPUT</span>
+              <div class="knob-wrapper knob-lg" title="Preamp Input Gain (Drag or Scroll)">
+                <svg class="knob-svg knob-svg-lg" viewBox="0 0 60 60">
+                  <circle class="knob-track-bg" cx="30" cy="30" r="23" />
+                  <circle class="knob-track-val val-amber" cx="30" cy="30" r="23" />
+                </svg>
+                <div class="knob-cap knob-cap-lg">
+                  <div class="knob-indicator"></div>
+                </div>
               </div>
-              <input type="range" id="slider-in-gain" min="-24.0" max="24.0" step="0.5" value="0.0" class="pro-slider">
+              <span class="knob-readout val-gain" id="val-in-gain">0.0 dB</span>
+              <input type="range" class="knob-hidden-input" id="slider-in-gain" min="-24.0" max="24.0" step="0.5" value="0.0">
+              <div class="slider-footer gain-quick-btns">
+                <button class="btn-micro" onclick="setGain('in', 0.0)">0 dB</button>
+                <button class="btn-micro" onclick="setGain('in', 3.0)">+3 dB</button>
+                <button class="btn-micro" onclick="setGain('in', 6.0)">+6 dB</button>
+              </div>
             </div>
-            <div class="slider-footer">
-              <button class="btn-micro" onclick="setGain('in', 0.0)">0 dB</button>
-              <button class="btn-micro" onclick="setGain('in', 3.0)">+3 dB</button>
-              <button class="btn-micro" onclick="setGain('in', 6.0)">+6 dB</button>
-            </div>
-          </div>
 
-          <div class="slider-container">
-            <div class="slider-header">
-              <span class="slider-name">MASTER OUTPUT</span>
-              <span class="slider-val" id="val-out-gain">0.0 dB</span>
-            </div>
-            <div class="slider-track-wrap">
-              <div class="fader-scale">
-                <span>+12</span>
-                <span>+6</span>
-                <span>0</span>
-                <span>-6</span>
-                <span>-12</span>
-                <span>-24</span>
+            <!-- Console Dial 2: Master Output -->
+            <div class="pedal-knob-unit console-knob-unit">
+              <span class="knob-label">MASTER OUTPUT</span>
+              <div class="knob-wrapper knob-lg" title="Master Output Level (Drag or Scroll)">
+                <svg class="knob-svg knob-svg-lg" viewBox="0 0 60 60">
+                  <circle class="knob-track-bg" cx="30" cy="30" r="23" />
+                  <circle class="knob-track-val val-green" cx="30" cy="30" r="23" />
+                </svg>
+                <div class="knob-cap knob-cap-lg">
+                  <div class="knob-indicator"></div>
+                </div>
               </div>
-              <input type="range" id="slider-out-gain" min="-24.0" max="24.0" step="0.5" value="0.0" class="pro-slider">
-            </div>
-            <div class="slider-footer">
-              <button class="btn-micro" onclick="setGain('out', -6.0)">-6 dB</button>
-              <button class="btn-micro" onclick="setGain('out', -3.0)">-3 dB</button>
-              <button class="btn-micro" onclick="setGain('out', 0.0)">0 dB</button>
+              <span class="knob-readout val-gain" id="val-out-gain">0.0 dB</span>
+              <input type="range" class="knob-hidden-input" id="slider-out-gain" min="-24.0" max="24.0" step="0.5" value="0.0">
+              <div class="slider-footer gain-quick-btns">
+                <button class="btn-micro" onclick="setGain('out', -6.0)">-6 dB</button>
+                <button class="btn-micro" onclick="setGain('out', -3.0)">-3 dB</button>
+                <button class="btn-micro" onclick="setGain('out', 0.0)">0 dB</button>
+              </div>
             </div>
           </div>
         </div>

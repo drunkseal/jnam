@@ -265,10 +265,12 @@ function renderStatus(data) {
     if (data.dsp.input_level !== undefined) {
       sliderInGain.value = data.dsp.input_level;
       valInGain.textContent = formatGain(data.dsp.input_level);
+      updateKnobVisual(sliderInGain);
     }
     if (data.dsp.output_level !== undefined) {
       sliderOutGain.value = data.dsp.output_level;
       valOutGain.textContent = formatGain(data.dsp.output_level);
+      updateKnobVisual(sliderOutGain);
     }
   }
 
@@ -679,9 +681,11 @@ window.setGain = async function(channel, val) {
   if (channel === 'in') {
     sliderInGain.value = val;
     valInGain.textContent = formatGain(val);
+    updateKnobVisual(sliderInGain);
   } else {
     sliderOutGain.value = val;
     valOutGain.textContent = formatGain(val);
+    updateKnobVisual(sliderOutGain);
   }
   await fetch(API.setGain, {
     method: 'POST',
