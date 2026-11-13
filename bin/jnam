@@ -338,8 +338,9 @@ def cmd_status(args=None):
 
     # Real-Time Engine Processes
     try:
-        ps_out = subprocess.check_output(["ps", "-eo", "pid,rtprio,comm,%cpu,%mem"], stderr=subprocess.DEVNULL).decode()
-        print(f"\n  {BOLD}Real-Time Engine Processes:{RESET}")
+        ps_out = subprocess.check_output(["ps", "-eo", "pid,psr,rtprio,comm,%cpu,%mem"], stderr=subprocess.DEVNULL).decode()
+        print(f"\n  {BOLD}Real-Time Engine Processes (Core & Priority):{RESET}")
+        print(f"    {DIM}PID   CPU  RTPRIO  COMMAND         %CPU  %MEM{RESET}")
         matched = False
         for line in ps_out.splitlines():
             if any(k in line for k in ["jackd", "jalv", "jconvolver", "aj-snapshot"]):

@@ -127,16 +127,27 @@ on_term() {
 trap on_term SIGINT SIGTERM
 trap cleanup EXIT
 
+# CPU Core Pinning for Real-Time Isolation
+# Core 3: 100% Dedicated to Neural Amp Modeler (WaveNet DSP)
+# Core 2: Dedicated to Cab IR (jconvolver), JACK Driver, and Connection Daemon
+NUM_CPUS=$(nproc || echo 1)
+NAM_AFFINITY=""
+CAB_AFFINITY=""
+if [ "$NUM_CPUS" -ge 4 ]; then
+    NAM_AFFINITY="taskset -c 3"
+    CAB_AFFINITY="taskset -c 2"
+fi
+
 # 6. Start NAM plugin host (jalv)
-echo "[jnam] Starting Neural Amp Modeler (jalv)..."
-jalv -n nam http://github.com/mikeoliphant/neural-amp-modeler-lv2 < "$FIFO" &
+echo "[jnam] Starting Neural Amp Modeler (jalv) on dedicated core..."
+$NAM_AFFINITY jalv -n nam http://github.com/mikeoliphant/neural-amp-modeler-lv2 < "$FIFO" &
 JALV_PID=$!
 PIDS_TO_WATCH+=($JALV_PID)
 
 # 7. Start Cab IR convolution engine (if enabled)
 if [ "$CAB_ENABLED" -eq 1 ]; then
     echo "[jnam] Starting Cab IR engine (jconvolver)..."
-    jconvolver -N cab "$NAM_DIR/cab.conf" &
+    $CAB_AFFINITY jconvolver -N cab "$NAM_DIR/cab.conf" &
     CAB_PID=$!
     PIDS_TO_WATCH+=($CAB_PID)
 fi
@@ -145,7 +156,7 @@ sleep 1.0
 
 # 8. Start connection keeper daemon (aj-snapshot)
 echo "[jnam] Starting connection manager (aj-snapshot)..."
-aj-snapshot -d -j -q "$NAM_DIR/connections.xml" &
+$CAB_AFFINITY aj-snapshot -d -j -q "$NAM_DIR/connections.xml" &
 SNAP_PID=$!
 
 # Initial connect attempt
