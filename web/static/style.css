@@ -444,10 +444,21 @@ body.daw-workspace {
   padding: 10px 14px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   overflow-x: auto;
   gap: 8px;
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
+}
+
+.patchbay-strip::-webkit-scrollbar {
+  height: 4px;
+}
+.patchbay-strip::-webkit-scrollbar-track {
+  background: #14171f;
+}
+.patchbay-strip::-webkit-scrollbar-thumb {
+  background: #2a3140;
+  border-radius: 2px;
 }
 
 .chain-node {
@@ -459,7 +470,8 @@ body.daw-workspace {
   display: flex;
   align-items: center;
   gap: 9px;
-  min-width: 120px;
+  min-width: 110px;
+  flex-shrink: 0;
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   cursor: pointer;
@@ -540,13 +552,14 @@ body.daw-workspace {
 
 /* Inter-Module Bus Conduit */
 .chain-wire {
-  flex: 1;
+  flex: 1 0 16px;
   height: 3px;
   background: #232733;
   min-width: 16px;
   position: relative;
   overflow: hidden;
   border-radius: 1.5px;
+  flex-shrink: 0;
 }
 
 .chain-wire.active {

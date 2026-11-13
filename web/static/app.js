@@ -38,36 +38,7 @@ const ledRig = document.getElementById('led-rig');
 const txtCpu = document.getElementById('txt-cpu');
 const btnRestart = document.getElementById('btn-restart');
 
-const nodeIn = document.getElementById('node-in');
-const wireDrive = document.getElementById('wire-drive');
-const nodeDrive = document.getElementById('node-drive');
-const chainDriveState = document.getElementById('chain-drive-state');
-
-const wireNam = document.getElementById('wire-nam');
-const nodeNam = document.getElementById('node-nam');
-const chainNamName = document.getElementById('chain-nam-name');
-
-const wireCab = document.getElementById('wire-cab');
-const nodeCab = document.getElementById('node-cab');
-const chainCabState = document.getElementById('chain-cab-state');
-
-const wireDelay = document.getElementById('wire-delay');
-const nodeDelay = document.getElementById('node-delay');
-const chainDelayState = document.getElementById('chain-delay-state');
-
-const wireReverb = document.getElementById('wire-reverb');
-const nodeReverb = document.getElementById('node-reverb');
-const chainReverbState = document.getElementById('chain-reverb-state');
-
-const wireOut = document.getElementById('wire-out');
-const nodeOut = document.getElementById('node-out');
-const chainInLabel = document.getElementById('chain-in-label');
-const chainOutLabel = document.getElementById('chain-out-label');
-
-// Pedalboard Badges & Cards
-const badgeFxDrive = document.getElementById('badge-fx-drive');
-const badgeFxDelay = document.getElementById('badge-fx-delay');
-const badgeFxReverb = document.getElementById('badge-fx-reverb');
+const patchbayStrip = document.getElementById('patchbay-strip');
 
 // Modular Pedalboard Elements
 const pedalboardSlotsContainer = document.getElementById('pedalboard-slots-container');
@@ -292,22 +263,22 @@ function renderStatus(data) {
     inChanButtons.forEach(btn => {
       btn.classList.toggle('active', btn.dataset.chan === hw.input_channel);
     });
-    if (hw.input_channel === 'both') {
+    if (chainInLabel && hw.input_channel === 'both') {
       chainInLabel.textContent = 'In 1 + 2';
-    } else if (hw.input_channel === '1') {
+    } else if (chainInLabel && hw.input_channel === '1') {
       chainInLabel.textContent = 'In 1 (Mic)';
-    } else {
+    } else if (chainInLabel) {
       chainInLabel.textContent = 'In 2 (Guitar)';
     }
 
     outChanButtons.forEach(btn => {
       btn.classList.toggle('active', btn.dataset.chan === hw.output_channel);
     });
-    if (hw.output_channel === 'stereo') {
+    if (chainOutLabel && hw.output_channel === 'stereo') {
       chainOutLabel.textContent = 'Stereo';
-    } else if (hw.output_channel === '1') {
+    } else if (chainOutLabel && hw.output_channel === '1') {
       chainOutLabel.textContent = 'Left (1)';
-    } else {
+    } else if (chainOutLabel) {
       chainOutLabel.textContent = 'Right (2)';
     }
 
@@ -356,114 +327,12 @@ function renderStatus(data) {
     }
   }
 
-  // Render Pedalboard FX
-  if (data.fx) {
-    const fx = data.fx;
-    const d = fx.drive || {};
-    const l = fx.delay || {};
-    const r = fx.reverb || {};
-
-    // Drive Stompbox & Node
-    if (stompDriveCard) stompDriveCard.classList.toggle('active', !!d.enabled);
-    if (ledFxDrive) ledFxDrive.classList.toggle('active', !!d.enabled);
-    if (btnToggleDrive) {
-      btnToggleDrive.classList.toggle('active', !!d.enabled);
-      btnToggleDrive.textContent = d.enabled ? 'ENGAGED' : 'STOMP';
-    }
-    if (badgeFxDrive) {
-      badgeFxDrive.textContent = d.enabled ? 'DRIVE: ACTIVE' : 'DRIVE: OFF';
-      badgeFxDrive.className = d.enabled ? 'badge active' : 'badge';
-    }
-    if (chainDriveState) chainDriveState.textContent = d.enabled ? 'TS-9' : 'BYPASS';
-    if (nodeDrive) {
-      nodeDrive.classList.toggle('active', isRunning && !!d.enabled);
-      nodeDrive.classList.toggle('bypassed', !d.enabled);
-    }
-
-    // Delay Stompbox & Node
-    if (stompDelayCard) stompDelayCard.classList.toggle('active', !!l.enabled);
-    if (ledFxDelay) ledFxDelay.classList.toggle('active', !!l.enabled);
-    if (btnToggleDelay) {
-      btnToggleDelay.classList.toggle('active', !!l.enabled);
-      btnToggleDelay.textContent = l.enabled ? 'ENGAGED' : 'STOMP';
-    }
-    if (badgeFxDelay) {
-      badgeFxDelay.textContent = l.enabled ? 'DELAY: ACTIVE' : 'DELAY: OFF';
-      badgeFxDelay.className = l.enabled ? 'badge active' : 'badge';
-    }
-    if (chainDelayState) chainDelayState.textContent = l.enabled ? 'DELAY' : 'BYPASS';
-    if (nodeDelay) {
-      nodeDelay.classList.toggle('active', isRunning && !!l.enabled);
-      nodeDelay.classList.toggle('bypassed', !l.enabled);
-    }
-
-    // Reverb Stompbox & Node
-    if (stompReverbCard) stompReverbCard.classList.toggle('active', !!r.enabled);
-    if (ledFxReverb) ledFxReverb.classList.toggle('active', !!r.enabled);
-    if (btnToggleReverb) {
-      btnToggleReverb.classList.toggle('active', !!r.enabled);
-      btnToggleReverb.textContent = r.enabled ? 'ENGAGED' : 'STOMP';
-    }
-    if (badgeFxReverb) {
-      badgeFxReverb.textContent = r.enabled ? 'REVERB: ACTIVE' : 'REVERB: OFF';
-      badgeFxReverb.className = r.enabled ? 'badge active' : 'badge';
-    }
-    if (chainReverbState) chainReverbState.textContent = r.enabled ? 'REVERB' : 'BYPASS';
-    if (nodeReverb) {
-      nodeReverb.classList.toggle('active', isRunning && !!r.enabled);
-      nodeReverb.classList.toggle('bypassed', !r.enabled);
-    }
-
-    // Sliders & Readouts (only update when user is not dragging)
-    if (!isUserDraggingFx) {
-      if (d.drive !== undefined && sliderDriveDrive) {
-        sliderDriveDrive.value = d.drive;
-        if (valDriveDrive) valDriveDrive.textContent = `${Math.round(d.drive * 100)}%`;
-        updateKnobVisual(sliderDriveDrive);
-      }
-      if (d.tone !== undefined && sliderDriveTone) {
-        sliderDriveTone.value = d.tone;
-        if (valDriveTone) valDriveTone.textContent = `${Math.round(d.tone)} Hz`;
-        updateKnobVisual(sliderDriveTone);
-      }
-      if (d.level !== undefined && sliderDriveLevel) {
-        sliderDriveLevel.value = d.level;
-        if (valDriveLevel) valDriveLevel.textContent = `${parseFloat(d.level).toFixed(1)} dB`;
-        updateKnobVisual(sliderDriveLevel);
-      }
-
-      if (l.time !== undefined && sliderDelayTime) {
-        sliderDelayTime.value = l.time;
-        if (valDelayTime) valDelayTime.textContent = `${Math.round(l.time)} ms`;
-        updateKnobVisual(sliderDelayTime);
-      }
-      if (l.level !== undefined && sliderDelayLevel) {
-        sliderDelayLevel.value = l.level;
-        if (valDelayMix) valDelayMix.textContent = `${parseFloat(l.level).toFixed(1)} dB`;
-        updateKnobVisual(sliderDelayLevel);
-      }
-      if (l.lfo !== undefined && sliderDelayLfo) {
-        sliderDelayLfo.value = l.lfo;
-        if (valDelayLfo) valDelayLfo.textContent = `${Math.round(l.lfo * 10)}%`;
-        updateKnobVisual(sliderDelayLfo);
-      }
-
-      if (r.roomsize !== undefined && sliderReverbRoom) {
-        sliderReverbRoom.value = r.roomsize;
-        if (valReverbRoom) valReverbRoom.textContent = `${Math.round(r.roomsize * 100)}%`;
-        updateKnobVisual(sliderReverbRoom);
-      }
-      if (r.damp !== undefined && sliderReverbDamp) {
-        sliderReverbDamp.value = r.damp;
-        if (valReverbDamp) valReverbDamp.textContent = `${Math.round(r.damp * 100)}%`;
-        updateKnobVisual(sliderReverbDamp);
-      }
-      if (r.dry_wet !== undefined && sliderReverbMix) {
-        sliderReverbMix.value = r.dry_wet;
-        if (valReverbMix) valReverbMix.textContent = `${Math.round(r.dry_wet)}%`;
-        updateKnobVisual(sliderReverbMix);
-      }
-    }
+  // Render Modular Pedalboard & Signal Routing Matrix
+  if (data.pedalboard && !isUserDraggingPedalKnob) {
+    pedalboardState = data.pedalboard;
+    renderPedalboard(data.pedalboard);
+  } else {
+    renderSignalRoutingMatrix();
   }
 
   // Metronome state sync
@@ -1889,6 +1758,227 @@ function bindPedalKnobUnit(unit, onParamChange) {
   }, { passive: false });
 }
 
+function getPedalCategoryIcon(category) {
+  switch ((category || '').toLowerCase()) {
+    case 'distortion':
+      return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
+    case 'modulation':
+      return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M2 12c4-8 8-8 12 0s8 8 12 0"/></svg>`;
+    case 'delay':
+      return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/></svg>`;
+    case 'reverb':
+      return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M2 12h20M2 12a10 10 0 0 1 20 0M5 12a7 7 0 0 1 14 0"/></svg>`;
+    case 'dynamics':
+      return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 20h16M4 4h16M7 16l5-8 5 8"/></svg>`;
+    case 'filter':
+      return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>`;
+    case 'pitch':
+      return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+    default:
+      return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/></svg>`;
+  }
+}
+
+function renderSignalRoutingMatrix() {
+  const patchbayStrip = document.getElementById('patchbay-strip');
+  if (!patchbayStrip) return;
+
+  const isRunning = currentStatus && currentStatus.services && currentStatus.services.jack && currentStatus.services.rig;
+  const hw = (currentStatus && currentStatus.hardware) || {};
+  const model = (currentStatus && currentStatus.model) || {};
+  const cab = (currentStatus && currentStatus.cab) || {};
+  const slots = (pedalboardState && pedalboardState.slots) || [];
+
+  // Capture label
+  let inLabel = 'In 1 + 2';
+  if (hw.input_channel === '1') inLabel = 'In 1 (Mic)';
+  else if (hw.input_channel === '2') inLabel = 'In 2 (Guitar)';
+
+  // Playback label
+  let outLabel = 'Stereo';
+  if (hw.output_channel === '1') outLabel = 'Left (1)';
+  else if (hw.output_channel === '2') outLabel = 'Right (2)';
+
+  // Model name
+  let modelLabel = 'No Model';
+  if (model.name) {
+    modelLabel = model.name.replace(/\.nam$/i, '').substring(0, 16);
+  }
+
+  // Cab status
+  const isCabEffective = !!cab.effective_active;
+  let cabSub = 'BYPASSED';
+  if (isCabEffective) {
+    cabSub = cab.name ? cab.name.replace(/\.wav$/i, '').substring(0, 12) : 'CONVOLVER';
+  } else if (cab.auto_bypassed) {
+    cabSub = 'RIG IR';
+  }
+
+  const preSlots = slots.filter(s => s.position === 'pre');
+  const postSlots = slots.filter(s => s.position === 'post');
+
+  // Build ordered node list
+  const nodes = [];
+
+  // 1. Capture node
+  nodes.push({
+    type: 'capture',
+    id: 'node-in',
+    icon: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>`,
+    label: 'CAPTURE',
+    sub: inLabel,
+    active: isRunning,
+    bypassed: false,
+    title: 'Hardware Input Capture (Click to focus routing)',
+    onClick: () => {
+      const el = document.getElementById('in-channel-group');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  // 2. Pre-amp pedals
+  preSlots.forEach(slot => {
+    const isSlotActive = isRunning && !!slot.enabled;
+    const cat = (slot.category || 'fx').toUpperCase();
+    nodes.push({
+      type: 'pedal',
+      slotId: slot.id,
+      icon: getPedalCategoryIcon(slot.category),
+      label: `PRE: ${cat.substring(0, 8)}`,
+      sub: slot.enabled ? slot.name.substring(0, 14) : 'BYPASS',
+      active: isSlotActive,
+      bypassed: !slot.enabled,
+      color: slot.color || '#10b981',
+      title: `${slot.name} (${slot.enabled ? 'ENGAGED - Click to Bypass' : 'BYPASSED - Click to Engage'})`,
+      onClick: () => togglePedalStomp(slot.id)
+    });
+  });
+
+  // 3. NAM Core
+  nodes.push({
+    type: 'nam',
+    id: 'node-nam',
+    icon: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>`,
+    label: 'NAM CORE',
+    sub: modelLabel,
+    active: isRunning,
+    bypassed: false,
+    title: `Neural Amp Modeler: ${model.name || 'Default'} (Click to select model)`,
+    onClick: () => {
+      const el = document.getElementById('select-model');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus();
+      }
+    }
+  });
+
+  // 4. Cab Conv
+  nodes.push({
+    type: 'cab',
+    id: 'node-cab',
+    icon: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>`,
+    label: 'CAB CONV',
+    sub: cabSub,
+    active: isRunning && isCabEffective,
+    bypassed: !isCabEffective,
+    title: `Cabinet IR (${isCabEffective ? 'ENGAGED - Click to Cycle Mode' : 'BYPASSED - Click to Cycle Mode'})`,
+    onClick: async () => {
+      const curMode = (currentStatus && currentStatus.cab && currentStatus.cab.mode) || 'auto';
+      const nextMode = curMode === 'auto' ? 'bypass' : (curMode === 'bypass' ? 'force' : 'auto');
+      try {
+        await fetch(API.setCab, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: nextMode })
+        });
+        setTimeout(updateStatus, 300);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  });
+
+  // 5. Post-amp pedals
+  postSlots.forEach(slot => {
+    const isSlotActive = isRunning && !!slot.enabled;
+    const cat = (slot.category || 'fx').toUpperCase();
+    nodes.push({
+      type: 'pedal',
+      slotId: slot.id,
+      icon: getPedalCategoryIcon(slot.category),
+      label: `POST: ${cat.substring(0, 8)}`,
+      sub: slot.enabled ? slot.name.substring(0, 14) : 'BYPASS',
+      active: isSlotActive,
+      bypassed: !slot.enabled,
+      color: slot.color || '#00e5ff',
+      title: `${slot.name} (${slot.enabled ? 'ENGAGED - Click to Bypass' : 'BYPASSED - Click to Engage'})`,
+      onClick: () => togglePedalStomp(slot.id)
+    });
+  });
+
+  // 6. Playback node
+  nodes.push({
+    type: 'playback',
+    id: 'node-out',
+    icon: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 18v-6a9 9 0 0 1 18 0v6M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>`,
+    label: 'PLAYBACK',
+    sub: outLabel,
+    active: isRunning,
+    bypassed: false,
+    title: 'Hardware Audio Playback (Click to focus routing)',
+    onClick: () => {
+      const el = document.getElementById('out-channel-group');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  // Render HTML
+  let html = '';
+  nodes.forEach((node, idx) => {
+    if (idx > 0) {
+      const delay = ((idx - 1) * 0.35) % 2.4;
+      html += `
+        <div class="chain-wire ${isRunning ? 'active' : ''}">
+          <div class="wire-pulse" style="animation-delay: ${delay.toFixed(2)}s"></div>
+        </div>
+      `;
+    }
+
+    const activeCls = node.active ? 'active' : '';
+    const bypassCls = node.bypassed ? 'bypassed' : '';
+    const colorStyle = (node.color && node.active) ? `border-top-color: ${node.color}; box-shadow: 0 0 10px ${node.color}30;` : '';
+
+    html += `
+      <div class="chain-node ${activeCls} ${bypassCls}" ${node.id ? `id="${node.id}"` : ''} data-index="${idx}" title="${escapeHtml(node.title || '')}" style="${colorStyle}">
+        <div class="node-icon-wrap" ${node.color && node.active ? `style="color: ${node.color}; border-color: ${node.color}60; background: ${node.color}15;"` : ''}>
+          ${node.icon}
+        </div>
+        <div class="node-content">
+          <span class="node-label">${escapeHtml(node.label)}</span>
+          <span class="node-sub" ${node.color && node.active ? `style="color: ${node.color};"` : ''}>${escapeHtml(node.sub)}</span>
+        </div>
+      </div>
+    `;
+  });
+
+  patchbayStrip.innerHTML = html;
+
+  // Attach click listeners to interactive nodes
+  const nodeEls = patchbayStrip.querySelectorAll('.chain-node');
+  nodeEls.forEach(el => {
+    const idx = parseInt(el.dataset.index, 10);
+    const nodeObj = nodes[idx];
+    if (nodeObj && nodeObj.onClick) {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        nodeObj.onClick();
+      });
+    }
+  });
+}
+
 function renderPedalboard(pb) {
   if (!pb || !pb.slots) return;
   if (isUserDraggingPedalKnob) return;
@@ -1903,6 +1993,8 @@ function renderPedalboard(pb) {
     badgePedalCount.textContent = `${activeCount} ACTIVE (${preCount} Pre / ${postCount} Post)`;
     badgePedalCount.className = activeCount > 0 ? 'badge active' : 'badge';
   }
+
+  renderSignalRoutingMatrix();
 
   if (!pedalboardSlotsContainer) return;
   pedalboardSlotsContainer.innerHTML = '';
@@ -2399,68 +2491,7 @@ window.setGain = async function(channel, val) {
 sliderInGain.addEventListener('change', () => { isUserDraggingGain = false; });
 sliderOutGain.addEventListener('change', () => { isUserDraggingGain = false; });
 
-// Pedalboard FX Stomp Buttons
-async function toggleFxSlot(slot, btnElement, cardElement, ledElement) {
-  const isCurrentlyOn = currentStatus && currentStatus.fx && currentStatus.fx[slot] && currentStatus.fx[slot].enabled;
-  const nextState = !isCurrentlyOn;
-  
-  if (cardElement) cardElement.classList.toggle('active', nextState);
-  if (ledElement) ledElement.classList.toggle('active', nextState);
-  if (btnElement) {
-    btnElement.classList.toggle('active', nextState);
-    btnElement.textContent = nextState ? 'ENGAGED' : 'STOMP';
-  }
-
-  // Optimistically update routing matrix node
-  let node = null;
-  let stateLabel = null;
-  let labelText = 'ACTIVE';
-  if (slot === 'drive') { node = nodeDrive; stateLabel = chainDriveState; labelText = 'TS-9'; }
-  else if (slot === 'delay') { node = nodeDelay; stateLabel = chainDelayState; labelText = 'DELAY'; }
-  else if (slot === 'reverb') { node = nodeReverb; stateLabel = chainReverbState; labelText = 'REVERB'; }
-
-  if (node) {
-    node.classList.toggle('active', nextState);
-    node.classList.toggle('bypassed', !nextState);
-  }
-  if (stateLabel) {
-    stateLabel.textContent = nextState ? labelText : 'BYPASS';
-  }
-
-  try {
-    const res = await fetch(API.setFx, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slot, enabled: nextState })
-    });
-    if (res.ok) {
-      setTimeout(updateStatus, 150);
-    }
-  } catch (err) {
-    console.error('Failed to toggle FX slot:', slot, err);
-  }
-}
-
-if (btnToggleDrive) btnToggleDrive.addEventListener('click', () => toggleFxSlot('drive', btnToggleDrive, stompDriveCard, ledFxDrive));
-if (btnToggleDelay) btnToggleDelay.addEventListener('click', () => toggleFxSlot('delay', btnToggleDelay, stompDelayCard, ledFxDelay));
-if (btnToggleReverb) btnToggleReverb.addEventListener('click', () => toggleFxSlot('reverb', btnToggleReverb, stompReverbCard, ledFxReverb));
-
-// Matrix patchbay interactive click triggers
-if (nodeDrive) {
-  nodeDrive.style.cursor = 'pointer';
-  nodeDrive.title = 'Click to Toggle TS-9 Overdrive';
-  nodeDrive.addEventListener('click', () => toggleFxSlot('drive', btnToggleDrive, stompDriveCard, ledFxDrive));
-}
-if (nodeDelay) {
-  nodeDelay.style.cursor = 'pointer';
-  nodeDelay.title = 'Click to Toggle Stereo Delay';
-  nodeDelay.addEventListener('click', () => toggleFxSlot('delay', btnToggleDelay, stompDelayCard, ledFxDelay));
-}
-if (nodeReverb) {
-  nodeReverb.style.cursor = 'pointer';
-  nodeReverb.title = 'Click to Toggle Studio Reverb';
-  nodeReverb.addEventListener('click', () => toggleFxSlot('reverb', btnToggleReverb, stompReverbCard, ledFxReverb));
-}
+// Sliders & Controls
 if (nodeCab) {
   nodeCab.style.cursor = 'pointer';
   nodeCab.title = 'Click to Cycle Cab Mode';
