@@ -372,6 +372,13 @@ body.daw-workspace {
   min-width: 120px;
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  user-select: none;
+}
+
+.chain-node:hover {
+  border-color: #4b5563;
+  transform: translateY(-1px);
 }
 
 .chain-node.active {
@@ -388,6 +395,10 @@ body.daw-workspace {
   opacity: 0.45;
   background: #14161d;
   border: 1px dashed #2d3340;
+}
+
+.chain-node.bypassed:hover {
+  opacity: 0.75;
 }
 
 .chain-node.bypassed .node-icon-wrap {
@@ -459,8 +470,15 @@ body.daw-workspace {
   width: 40%;
   height: 100%;
   background: linear-gradient(90deg, transparent, var(--meter-green), transparent);
-  animation: wireFlow 2s linear infinite;
+  animation: wireFlow 2.4s linear infinite;
 }
+
+#wire-drive.active .wire-pulse  { animation-delay: 0.0s; }
+#wire-nam.active .wire-pulse    { animation-delay: 0.4s; }
+#wire-cab.active .wire-pulse    { animation-delay: 0.8s; }
+#wire-delay.active .wire-pulse  { animation-delay: 1.2s; }
+#wire-reverb.active .wire-pulse { animation-delay: 1.6s; }
+#wire-out.active .wire-pulse    { animation-delay: 2.0s; }
 
 @keyframes wireFlow {
   0% { transform: translateX(-100%); }

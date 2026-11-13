@@ -30,22 +30,31 @@ const ledRig = document.getElementById('led-rig');
 const txtCpu = document.getElementById('txt-cpu');
 const btnRestart = document.getElementById('btn-restart');
 
+const nodeIn = document.getElementById('node-in');
+const wireDrive = document.getElementById('wire-drive');
+const nodeDrive = document.getElementById('node-drive');
+const chainDriveState = document.getElementById('chain-drive-state');
+
+const wireNam = document.getElementById('wire-nam');
+const nodeNam = document.getElementById('node-nam');
 const chainNamName = document.getElementById('chain-nam-name');
+
+const wireCab = document.getElementById('wire-cab');
+const nodeCab = document.getElementById('node-cab');
 const chainCabState = document.getElementById('chain-cab-state');
+
+const wireDelay = document.getElementById('wire-delay');
+const nodeDelay = document.getElementById('node-delay');
+const chainDelayState = document.getElementById('chain-delay-state');
+
+const wireReverb = document.getElementById('wire-reverb');
+const nodeReverb = document.getElementById('node-reverb');
+const chainReverbState = document.getElementById('chain-reverb-state');
+
+const wireOut = document.getElementById('wire-out');
+const nodeOut = document.getElementById('node-out');
 const chainInLabel = document.getElementById('chain-in-label');
 const chainOutLabel = document.getElementById('chain-out-label');
-const nodeCab = document.getElementById('node-cab');
-const wireCab = document.getElementById('wire-cab');
-
-const nodeDrive = document.getElementById('node-drive');
-const wireDrive = document.getElementById('wire-drive');
-const chainDriveState = document.getElementById('chain-drive-state');
-const nodeDelay = document.getElementById('node-delay');
-const wireDelay = document.getElementById('wire-delay');
-const chainDelayState = document.getElementById('chain-delay-state');
-const nodeReverb = document.getElementById('node-reverb');
-const wireReverb = document.getElementById('wire-reverb');
-const chainReverbState = document.getElementById('chain-reverb-state');
 
 // Pedalboard Badges & Cards
 const badgeFxDrive = document.getElementById('badge-fx-drive');
@@ -70,7 +79,7 @@ const valDelayTime = document.getElementById('val-delay-time');
 const sliderDelayLfo = document.getElementById('slider-delay-lfo');
 const valDelayLfo = document.getElementById('val-delay-lfo');
 const sliderDelayLevel = document.getElementById('slider-delay-level');
-const valDelayMix = document.getElementById('val-delay-mix');
+const valDelayMix = document.getElementById('val-delay-level') || document.getElementById('val-delay-mix');
 
 const stompReverbCard = document.getElementById('stomp-reverb-card');
 const ledFxReverb = document.getElementById('led-fx-reverb');
@@ -145,7 +154,8 @@ function renderStatus(data) {
   }
 
   // Top bar Rig
-  if (data.rig_running) {
+  const isRunning = !!data.rig_running;
+  if (isRunning) {
     txtRig.textContent = 'RUNNING';
     ledRig.className = 'led green';
   } else {
@@ -153,16 +163,25 @@ function renderStatus(data) {
     ledRig.className = 'led red';
   }
 
+  // Signal Routing Wires & Static Nodes
+  const allWires = [wireDrive, wireNam, wireCab, wireDelay, wireReverb, wireOut];
+  allWires.forEach(w => {
+    if (w) w.classList.toggle('active', isRunning);
+  });
+  if (nodeIn) nodeIn.classList.toggle('active', isRunning);
+  if (nodeNam) nodeNam.classList.toggle('active', isRunning);
+  if (nodeOut) nodeOut.classList.toggle('active', isRunning);
+
   // CPU
   const cpuTotal = (data.telemetry.jalv_cpu + data.telemetry.jackd_cpu).toFixed(1);
   txtCpu.textContent = `${cpuTotal}%`;
 
   // Model display
-  const m = data.current_model;
+  const m = data.current_model || {};
   if (m.filename) {
     displayModelName.textContent = m.filename.replace(/\.nam$/i, '');
-    displayModelMeta.textContent = `${m.folder} • Gear: ${m.gear_type.toUpperCase()}`;
-    chainNamName.textContent = m.filename.slice(0, 12) + '...';
+    displayModelMeta.textContent = `${m.folder} • Gear: ${(m.gear_type || 'amp').toUpperCase()}`;
+    if (chainNamName) chainNamName.textContent = m.filename.slice(0, 12) + '...';
     if (m.is_full_rig) {
       modelBadge.textContent = 'FULL RIG (CAB BAKED-IN)';
       modelBadge.className = 'badge';
@@ -176,7 +195,7 @@ function renderStatus(data) {
   }
 
   // Cab & Bypass display
-  const cab = data.cab;
+  const cab = data.cab || {};
   cabModeButtons.forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mode === cab.mode);
   });
@@ -184,17 +203,20 @@ function renderStatus(data) {
   if (cab.effective_active) {
     cabBadge.textContent = 'ACTIVE';
     cabBadge.className = 'badge active';
-    chainCabState.textContent = 'CONVOLVER';
-    nodeCab.classList.remove('bypassed');
-    nodeCab.classList.add('active');
-    wireCab.classList.add('active');
+    if (chainCabState) chainCabState.textContent = 'CONVOLVER';
+    if (nodeCab) {
+      nodeCab.classList.remove('bypassed');
+      nodeCab.classList.toggle('active', isRunning);
+    }
     cabInfoBanner.style.display = 'none';
   } else {
     cabBadge.textContent = 'BYPASSED';
     cabBadge.className = 'badge bypassed';
-    chainCabState.textContent = 'BYPASS';
-    nodeCab.classList.add('bypassed');
-    nodeCab.classList.remove('active');
+    if (chainCabState) chainCabState.textContent = 'BYPASS';
+    if (nodeCab) {
+      nodeCab.classList.add('bypassed');
+      nodeCab.classList.remove('active');
+    }
     cabInfoBanner.style.display = 'block';
     if (m.is_full_rig) {
       cabInfoBanner.textContent = 'Cab IR bypassed because active model already contains a physical cabinet & microphone capture.';
@@ -282,81 +304,110 @@ function renderStatus(data) {
     const r = fx.reverb || {};
 
     // Drive Stompbox & Node
-    stompDriveCard.classList.toggle('active', !!d.enabled);
-    ledFxDrive.classList.toggle('active', !!d.enabled);
-    btnToggleDrive.classList.toggle('active', !!d.enabled);
-    btnToggleDrive.textContent = d.enabled ? 'ENGAGED' : 'STOMP';
-    badgeFxDrive.textContent = d.enabled ? 'DRIVE: ACTIVE' : 'DRIVE: OFF';
-    badgeFxDrive.className = d.enabled ? 'badge active' : 'badge';
+    if (stompDriveCard) stompDriveCard.classList.toggle('active', !!d.enabled);
+    if (ledFxDrive) ledFxDrive.classList.toggle('active', !!d.enabled);
+    if (btnToggleDrive) {
+      btnToggleDrive.classList.toggle('active', !!d.enabled);
+      btnToggleDrive.textContent = d.enabled ? 'ENGAGED' : 'STOMP';
+    }
+    if (badgeFxDrive) {
+      badgeFxDrive.textContent = d.enabled ? 'DRIVE: ACTIVE' : 'DRIVE: OFF';
+      badgeFxDrive.className = d.enabled ? 'badge active' : 'badge';
+    }
     if (chainDriveState) chainDriveState.textContent = d.enabled ? 'TS-9' : 'BYPASS';
-    if (nodeDrive) nodeDrive.classList.toggle('active', !!d.enabled);
-    if (wireDrive) wireDrive.classList.toggle('active', !!d.enabled);
+    if (nodeDrive) {
+      nodeDrive.classList.toggle('active', isRunning && !!d.enabled);
+      nodeDrive.classList.toggle('bypassed', !d.enabled);
+    }
 
     // Delay Stompbox & Node
-    stompDelayCard.classList.toggle('active', !!l.enabled);
-    ledFxDelay.classList.toggle('active', !!l.enabled);
-    btnToggleDelay.classList.toggle('active', !!l.enabled);
-    btnToggleDelay.textContent = l.enabled ? 'ENGAGED' : 'STOMP';
-    badgeFxDelay.textContent = l.enabled ? 'DELAY: ACTIVE' : 'DELAY: OFF';
-    badgeFxDelay.className = l.enabled ? 'badge active' : 'badge';
+    if (stompDelayCard) stompDelayCard.classList.toggle('active', !!l.enabled);
+    if (ledFxDelay) ledFxDelay.classList.toggle('active', !!l.enabled);
+    if (btnToggleDelay) {
+      btnToggleDelay.classList.toggle('active', !!l.enabled);
+      btnToggleDelay.textContent = l.enabled ? 'ENGAGED' : 'STOMP';
+    }
+    if (badgeFxDelay) {
+      badgeFxDelay.textContent = l.enabled ? 'DELAY: ACTIVE' : 'DELAY: OFF';
+      badgeFxDelay.className = l.enabled ? 'badge active' : 'badge';
+    }
     if (chainDelayState) chainDelayState.textContent = l.enabled ? 'DELAY' : 'BYPASS';
-    if (nodeDelay) nodeDelay.classList.toggle('active', !!l.enabled);
-    if (wireDelay) wireDelay.classList.toggle('active', !!l.enabled);
+    if (nodeDelay) {
+      nodeDelay.classList.toggle('active', isRunning && !!l.enabled);
+      nodeDelay.classList.toggle('bypassed', !l.enabled);
+    }
 
     // Reverb Stompbox & Node
-    stompReverbCard.classList.toggle('active', !!r.enabled);
-    ledFxReverb.classList.toggle('active', !!r.enabled);
-    btnToggleReverb.classList.toggle('active', !!r.enabled);
-    btnToggleReverb.textContent = r.enabled ? 'ENGAGED' : 'STOMP';
-    badgeFxReverb.textContent = r.enabled ? 'REVERB: ACTIVE' : 'REVERB: OFF';
-    badgeFxReverb.className = r.enabled ? 'badge active' : 'badge';
+    if (stompReverbCard) stompReverbCard.classList.toggle('active', !!r.enabled);
+    if (ledFxReverb) ledFxReverb.classList.toggle('active', !!r.enabled);
+    if (btnToggleReverb) {
+      btnToggleReverb.classList.toggle('active', !!r.enabled);
+      btnToggleReverb.textContent = r.enabled ? 'ENGAGED' : 'STOMP';
+    }
+    if (badgeFxReverb) {
+      badgeFxReverb.textContent = r.enabled ? 'REVERB: ACTIVE' : 'REVERB: OFF';
+      badgeFxReverb.className = r.enabled ? 'badge active' : 'badge';
+    }
     if (chainReverbState) chainReverbState.textContent = r.enabled ? 'REVERB' : 'BYPASS';
-    if (nodeReverb) nodeReverb.classList.toggle('active', !!r.enabled);
-    if (wireReverb) wireReverb.classList.toggle('active', !!r.enabled);
+    if (nodeReverb) {
+      nodeReverb.classList.toggle('active', isRunning && !!r.enabled);
+      nodeReverb.classList.toggle('bypassed', !r.enabled);
+    }
 
     // Sliders & Readouts (only update when user is not dragging)
     if (!isUserDraggingFx) {
-      if (d.drive !== undefined) {
+      if (d.drive !== undefined && sliderDriveDrive) {
         sliderDriveDrive.value = d.drive;
-        valDriveDrive.textContent = `${Math.round(d.drive * 100)}%`;
+        if (valDriveDrive) valDriveDrive.textContent = `${Math.round(d.drive * 100)}%`;
+        updateKnobVisual(sliderDriveDrive);
       }
-      if (d.tone !== undefined) {
+      if (d.tone !== undefined && sliderDriveTone) {
         sliderDriveTone.value = d.tone;
-        valDriveTone.textContent = `${Math.round(d.tone)} Hz`;
+        if (valDriveTone) valDriveTone.textContent = `${Math.round(d.tone)} Hz`;
+        updateKnobVisual(sliderDriveTone);
       }
-      if (d.level !== undefined) {
+      if (d.level !== undefined && sliderDriveLevel) {
         sliderDriveLevel.value = d.level;
-        valDriveLevel.textContent = `${parseFloat(d.level).toFixed(1)} dB`;
+        if (valDriveLevel) valDriveLevel.textContent = `${parseFloat(d.level).toFixed(1)} dB`;
+        updateKnobVisual(sliderDriveLevel);
       }
 
-      if (l.time !== undefined) {
+      if (l.time !== undefined && sliderDelayTime) {
         sliderDelayTime.value = l.time;
-        valDelayTime.textContent = `${Math.round(l.time)} ms`;
+        if (valDelayTime) valDelayTime.textContent = `${Math.round(l.time)} ms`;
+        updateKnobVisual(sliderDelayTime);
       }
-      if (l.level !== undefined) {
+      if (l.level !== undefined && sliderDelayLevel) {
         sliderDelayLevel.value = l.level;
-        valDelayMix.textContent = `${parseFloat(l.level).toFixed(1)} dB`;
+        if (valDelayMix) valDelayMix.textContent = `${parseFloat(l.level).toFixed(1)} dB`;
+        updateKnobVisual(sliderDelayLevel);
       }
-      if (l.lfo !== undefined) {
+      if (l.lfo !== undefined && sliderDelayLfo) {
         sliderDelayLfo.value = l.lfo;
-        valDelayLfo.textContent = `${Math.round(l.lfo * 10)}%`;
+        if (valDelayLfo) valDelayLfo.textContent = `${Math.round(l.lfo * 10)}%`;
+        updateKnobVisual(sliderDelayLfo);
       }
 
-      if (r.roomsize !== undefined) {
+      if (r.roomsize !== undefined && sliderReverbRoom) {
         sliderReverbRoom.value = r.roomsize;
-        valReverbRoom.textContent = `${Math.round(r.roomsize * 100)}%`;
+        if (valReverbRoom) valReverbRoom.textContent = `${Math.round(r.roomsize * 100)}%`;
+        updateKnobVisual(sliderReverbRoom);
       }
-      if (r.damp !== undefined) {
+      if (r.damp !== undefined && sliderReverbDamp) {
         sliderReverbDamp.value = r.damp;
-        valReverbDamp.textContent = `${Math.round(r.damp * 100)}%`;
+        if (valReverbDamp) valReverbDamp.textContent = `${Math.round(r.damp * 100)}%`;
+        updateKnobVisual(sliderReverbDamp);
       }
-      if (r.dry_wet !== undefined) {
+      if (r.dry_wet !== undefined && sliderReverbMix) {
         sliderReverbMix.value = r.dry_wet;
-        valReverbMix.textContent = `${Math.round(r.dry_wet)}%`;
+        if (valReverbMix) valReverbMix.textContent = `${Math.round(r.dry_wet)}%`;
+        updateKnobVisual(sliderReverbMix);
       }
-      syncAllKnobsVisuals();
     }
   }
+
+  // Always sync all knob visuals
+  syncAllKnobsVisuals();
 }
 
 function formatGain(val) {
@@ -694,15 +745,36 @@ window.setGain = async function(channel, val) {
   });
 };
 
+sliderInGain.addEventListener('change', () => { isUserDraggingGain = false; });
+sliderOutGain.addEventListener('change', () => { isUserDraggingGain = false; });
+
 // Pedalboard FX Stomp Buttons
 async function toggleFxSlot(slot, btnElement, cardElement, ledElement) {
   const isCurrentlyOn = currentStatus && currentStatus.fx && currentStatus.fx[slot] && currentStatus.fx[slot].enabled;
   const nextState = !isCurrentlyOn;
   
-  cardElement.classList.toggle('active', nextState);
-  ledElement.classList.toggle('active', nextState);
-  btnElement.classList.toggle('active', nextState);
-  btnElement.textContent = nextState ? 'ENGAGED' : 'STOMP';
+  if (cardElement) cardElement.classList.toggle('active', nextState);
+  if (ledElement) ledElement.classList.toggle('active', nextState);
+  if (btnElement) {
+    btnElement.classList.toggle('active', nextState);
+    btnElement.textContent = nextState ? 'ENGAGED' : 'STOMP';
+  }
+
+  // Optimistically update routing matrix node
+  let node = null;
+  let stateLabel = null;
+  let labelText = 'ACTIVE';
+  if (slot === 'drive') { node = nodeDrive; stateLabel = chainDriveState; labelText = 'TS-9'; }
+  else if (slot === 'delay') { node = nodeDelay; stateLabel = chainDelayState; labelText = 'DELAY'; }
+  else if (slot === 'reverb') { node = nodeReverb; stateLabel = chainReverbState; labelText = 'REVERB'; }
+
+  if (node) {
+    node.classList.toggle('active', nextState);
+    node.classList.toggle('bypassed', !nextState);
+  }
+  if (stateLabel) {
+    stateLabel.textContent = nextState ? labelText : 'BYPASS';
+  }
 
   try {
     const res = await fetch(API.setFx, {
@@ -718,9 +790,44 @@ async function toggleFxSlot(slot, btnElement, cardElement, ledElement) {
   }
 }
 
-btnToggleDrive.addEventListener('click', () => toggleFxSlot('drive', btnToggleDrive, stompDriveCard, ledFxDrive));
-btnToggleDelay.addEventListener('click', () => toggleFxSlot('delay', btnToggleDelay, stompDelayCard, ledFxDelay));
-btnToggleReverb.addEventListener('click', () => toggleFxSlot('reverb', btnToggleReverb, stompReverbCard, ledFxReverb));
+if (btnToggleDrive) btnToggleDrive.addEventListener('click', () => toggleFxSlot('drive', btnToggleDrive, stompDriveCard, ledFxDrive));
+if (btnToggleDelay) btnToggleDelay.addEventListener('click', () => toggleFxSlot('delay', btnToggleDelay, stompDelayCard, ledFxDelay));
+if (btnToggleReverb) btnToggleReverb.addEventListener('click', () => toggleFxSlot('reverb', btnToggleReverb, stompReverbCard, ledFxReverb));
+
+// Matrix patchbay interactive click triggers
+if (nodeDrive) {
+  nodeDrive.style.cursor = 'pointer';
+  nodeDrive.title = 'Click to Toggle TS-9 Overdrive';
+  nodeDrive.addEventListener('click', () => toggleFxSlot('drive', btnToggleDrive, stompDriveCard, ledFxDrive));
+}
+if (nodeDelay) {
+  nodeDelay.style.cursor = 'pointer';
+  nodeDelay.title = 'Click to Toggle Stereo Delay';
+  nodeDelay.addEventListener('click', () => toggleFxSlot('delay', btnToggleDelay, stompDelayCard, ledFxDelay));
+}
+if (nodeReverb) {
+  nodeReverb.style.cursor = 'pointer';
+  nodeReverb.title = 'Click to Toggle Studio Reverb';
+  nodeReverb.addEventListener('click', () => toggleFxSlot('reverb', btnToggleReverb, stompReverbCard, ledFxReverb));
+}
+if (nodeCab) {
+  nodeCab.style.cursor = 'pointer';
+  nodeCab.title = 'Click to Cycle Cab Mode';
+  nodeCab.addEventListener('click', async () => {
+    const curMode = (currentStatus && currentStatus.cab && currentStatus.cab.mode) || 'auto';
+    const nextMode = curMode === 'auto' ? 'bypass' : (curMode === 'bypass' ? 'force' : 'auto');
+    try {
+      await fetch(API.setCab, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: nextMode })
+      });
+      setTimeout(updateStatus, 300);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+}
 
 // Boutique Rotary Knob Controllers for Stompboxes
 function updateKnobVisual(input) {
@@ -734,11 +841,12 @@ function updateKnobVisual(input) {
   const min = parseFloat(input.min);
   const max = parseFloat(input.max);
   const val = parseFloat(input.value);
+  if (isNaN(min) || isNaN(max) || isNaN(val) || max === min) return;
   const pct = Math.max(0, Math.min(1, (val - min) / (max - min)));
   const angle = -135 + (pct * 270);
   cap.style.transform = `rotate(${angle}deg)`;
   const totalArc = 108.38; // 270 deg of radius 23
-  arc.style.strokeDashoffset = totalArc * (1 - pct);
+  arc.style.strokeDashoffset = (totalArc * (1 - pct)).toFixed(2);
 }
 
 function syncAllKnobsVisuals() {
@@ -791,6 +899,7 @@ function initRotaryKnobs() {
       if (!isDragging) return;
       isDragging = false;
       isUserDraggingFx = false;
+      isUserDraggingGain = false;
       knob.classList.remove('dragging');
       try { knob.releasePointerCapture(e.pointerId); } catch(err) {}
       input.dispatchEvent(new Event('change'));
@@ -816,11 +925,13 @@ function initRotaryKnobs() {
 }
 
 function attachFxSlider(slider, readout, slot, paramKey, formatFn) {
+  if (!slider) return;
   let debounceTimer = null;
   slider.addEventListener('input', (e) => {
     isUserDraggingFx = true;
     const val = parseFloat(e.target.value);
-    readout.textContent = formatFn(val);
+    if (readout) readout.textContent = formatFn(val);
+    updateKnobVisual(slider);
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       fetch(API.setFx, {
@@ -832,6 +943,7 @@ function attachFxSlider(slider, readout, slot, paramKey, formatFn) {
   });
   slider.addEventListener('change', () => {
     isUserDraggingFx = false;
+    updateKnobVisual(slider);
   });
 }
 
@@ -873,3 +985,10 @@ loadDevices();
 initRotaryKnobs();
 updateStatus();
 setInterval(updateStatus, 4000);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    updateStatus();
+    syncAllKnobsVisuals();
+  }
+});
